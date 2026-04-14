@@ -267,6 +267,28 @@ export function SaleForm() {
       }
     }
 
+    // Minimum price check — no item should go below 90% of selling price after discount
+    const discountPct = parseFloat(formData.discount_percentage) || 0
+    for (const item of validItems) {
+      if (item.product_id) {
+        const product = products.find((p) => p.id === item.product_id)
+        if (product) {
+          const minAllowed = parseFloat(product.selling_price) * 0.9
+          const effectivePrice = item.unit_price * (1 - discountPct / 100)
+          if (effectivePrice < minAllowed) {
+            alert(
+              `Price too low for "${product.name}".\n\n` +
+              `Selling price: QAR ${parseFloat(product.selling_price).toFixed(2)}\n` +
+              `Minimum allowed (90%): QAR ${minAllowed.toFixed(2)}\n` +
+              `Your effective price: QAR ${effectivePrice.toFixed(2)} (unit: ${item.unit_price} - ${discountPct}% discount)\n\n` +
+              `Please increase the price or reduce the discount.`
+            )
+            return
+          }
+        }
+      }
+    }
+
     setSaving(true)
     try {
       const saleData = {
