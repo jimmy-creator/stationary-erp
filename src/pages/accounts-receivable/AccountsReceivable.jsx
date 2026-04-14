@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { DollarSign, AlertTriangle, Clock, CheckCircle } from 'lucide-react'
+import { DollarSign, AlertTriangle, Clock, CheckCircle, Printer } from 'lucide-react'
 import { SearchInput } from '../../components/SearchInput'
 import { useDebounce } from '../../hooks/useDebounce'
 
@@ -104,14 +104,118 @@ export function AccountsReceivable() {
     return `${days}d`
   }
 
+  // Customer-wise balance summary
+  const customerBalances = (() => {
+    const map = {}
+    filteredSales.forEach((s) => {
+      const name = s.customer_name || 'Walk-in'
+      if (!map[name]) map[name] = { name, total: 0, paid: 0, balance: 0, invoices: 0 }
+      map[name].total += parseFloat(s.grand_total || 0)
+      map[name].paid += s.total_paid
+      map[name].balance += s.balance
+      map[name].invoices += 1
+    })
+    return Object.values(map).sort((a, b) => b.balance - a.balance)
+  })()
+
+  const handlePrint = () => window.print()
+
   if (loading) {
     return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
   }
 
   return (
     <div>
+      {/* ══ Printable Report (hidden on screen, visible on print) ══ */}
+      <div className="hidden print:block print-area">
+        <div style={{ padding: '0' }}>
+          <h1 style={{ fontSize: '18pt', fontWeight: 700, marginBottom: '4px', color: '#111' }}>Accounts Receivable Report</h1>
+          <p style={{ fontSize: '10pt', color: '#666', marginBottom: '20px' }}>
+            Generated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            {filter.customer && ` | Customer: ${filter.customer}`}
+          </p>
+
+          {/* Summary */}
+          <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', borderBottom: '2px solid #e5e7eb', paddingBottom: '12px' }}>
+            <div><p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase' }}>Total Outstanding</p><p style={{ fontSize: '16pt', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(totalOutstanding)}</p></div>
+            <div><p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase' }}>Invoices</p><p style={{ fontSize: '16pt', fontWeight: 700, color: '#111' }}>{filteredSales.length}</p></div>
+            <div><p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase' }}>Customers</p><p style={{ fontSize: '16pt', fontWeight: 700, color: '#111' }}>{customerBalances.length}</p></div>
+          </div>
+
+          {/* Customer Balances Table */}
+          <h2 style={{ fontSize: '12pt', fontWeight: 600, marginBottom: '8px', color: '#111' }}>Customer Balances</h2>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px', fontSize: '10pt' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #d1d5db' }}>
+                <th style={{ textAlign: 'left', padding: '6px 8px', color: '#666', fontWeight: 600, fontSize: '9pt', textTransform: 'uppercase' }}>Customer</th>
+                <th style={{ textAlign: 'center', padding: '6px 8px', color: '#666', fontWeight: 600, fontSize: '9pt', textTransform: 'uppercase' }}>Invoices</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px', color: '#666', fontWeight: 600, fontSize: '9pt', textTransform: 'uppercase' }}>Total</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px', color: '#666', fontWeight: 600, fontSize: '9pt', textTransform: 'uppercase' }}>Paid</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px', color: '#666', fontWeight: 600, fontSize: '9pt', textTransform: 'uppercase' }}>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customerBalances.map((c) => (
+                <tr key={c.name} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '8px', fontWeight: 500, color: '#111' }}>{c.name}</td>
+                  <td style={{ padding: '8px', textAlign: 'center', color: '#666' }}>{c.invoices}</td>
+                  <td style={{ padding: '8px', textAlign: 'right', color: '#374151' }}>{formatCurrency(c.total)}</td>
+                  <td style={{ padding: '8px', textAlign: 'right', color: '#16a34a' }}>{formatCurrency(c.paid)}</td>
+                  <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(c.balance)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTop: '2px solid #111' }}>
+                <td style={{ padding: '8px', fontWeight: 700, color: '#111' }}>Total</td>
+                <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600, color: '#111' }}>{filteredSales.length}</td>
+                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#111' }}>{formatCurrency(customerBalances.reduce((s, c) => s + c.total, 0))}</td>
+                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>{formatCurrency(customerBalances.reduce((s, c) => s + c.paid, 0))}</td>
+                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(totalOutstanding)}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          {/* Invoice Details */}
+          <h2 style={{ fontSize: '12pt', fontWeight: 600, marginBottom: '8px', color: '#111' }}>Invoice Details</h2>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #d1d5db' }}>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Invoice</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Date</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Customer</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Status</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Age</th>
+                <th style={{ textAlign: 'right', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Total</th>
+                <th style={{ textAlign: 'right', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Paid</th>
+                <th style={{ textAlign: 'right', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredSales.map((sale) => (
+                <tr key={sale.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '6px', color: '#111', fontWeight: 500 }}>{sale.invoice_number}</td>
+                  <td style={{ padding: '6px', color: '#666' }}>{formatDate(sale.sale_date)}</td>
+                  <td style={{ padding: '6px', color: '#374151' }}>{sale.customer_name || 'Walk-in'}</td>
+                  <td style={{ padding: '6px', color: sale.payment_status === 'unpaid' ? '#dc2626' : '#ca8a04' }}>{sale.payment_status === 'unpaid' ? 'Unpaid' : 'Partial'}</td>
+                  <td style={{ padding: '6px', color: sale.days_overdue > 30 ? '#dc2626' : '#666' }}>{sale.days_overdue}d</td>
+                  <td style={{ padding: '6px', textAlign: 'right', color: '#374151' }}>{formatCurrency(sale.grand_total)}</td>
+                  <td style={{ padding: '6px', textAlign: 'right', color: '#16a34a' }}>{formatCurrency(sale.total_paid)}</td>
+                  <td style={{ padding: '6px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(sale.balance)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ══ Screen UI ══ */}
+      <div className="print:hidden">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h1 className="text-xl lg:text-2xl font-bold text-white">Accounts Receivable</h1>
+        <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:bg-zinc-700 transition-colors">
+          <Printer className="w-4 h-4" /> Print Report
+        </button>
       </div>
 
       <div className="mb-4">
@@ -326,6 +430,7 @@ export function AccountsReceivable() {
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }
