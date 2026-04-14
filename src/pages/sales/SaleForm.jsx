@@ -29,6 +29,7 @@ export function SaleForm() {
   })
 
   const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0 }])
+  const [lastPrices, setLastPrices] = useState({}) // { product_id: last_unit_price }
 
   useEffect(() => {
     fetchData().then(() => {
@@ -88,20 +89,63 @@ export function SaleForm() {
     }
   }
 
-  const handleCustomerChange = (customerId) => {
+  const handleCustomerChange = async (customerId) => {
     const customer = customers.find((c) => c.id === customerId)
     setFormData({ ...formData, customer_id: customerId, customer_name: customer?.name || '' })
+
+    // Fetch last prices for this customer
+    if (customerId) {
+      try {
+        const { data: lastSales } = await supabase
+          .from('sales')
+          .select('id')
+          .eq('customer_id', customerId)
+          .eq('status', 'completed')
+          .order('sale_date', { ascending: false })
+          .limit(10)
+
+        if (lastSales?.length) {
+          const saleIds = lastSales.map((s) => s.id)
+          const { data: saleItems } = await supabase
+            .from('sale_items')
+            .select('product_id, unit_price, sale_id')
+            .in('sale_id', saleIds)
+
+          // Build map: product_id → most recent price (first match since sales are desc ordered)
+          const priceMap = {}
+          const saleOrder = {}
+          saleIds.forEach((id, idx) => { saleOrder[id] = idx })
+
+          saleItems?.forEach((item) => {
+            if (item.product_id && !(item.product_id in priceMap)) {
+              priceMap[item.product_id] = item.unit_price
+            }
+          })
+          setLastPrices(priceMap)
+        } else {
+          setLastPrices({})
+        }
+      } catch (err) {
+        console.error('Error fetching last prices:', err)
+        setLastPrices({})
+      }
+    } else {
+      setLastPrices({})
+    }
   }
 
   const handleProductChange = (index, productId) => {
     const product = products.find((p) => p.id === productId)
+    // Use last price for this customer if available, otherwise default selling price
+    const lastPrice = lastPrices[productId]
+    const price = lastPrice !== undefined ? lastPrice : (product?.selling_price || 0)
     const newItems = [...items]
     newItems[index] = {
       ...newItems[index],
       product_id: productId,
       product_name: product?.name || '',
-      unit_price: product?.selling_price || 0,
-      total_price: (product?.selling_price || 0) * newItems[index].quantity,
+      unit_price: price,
+      total_price: price * newItems[index].quantity,
     }
     setItems(newItems)
   }
@@ -360,6 +404,22 @@ export function SaleForm() {
                 <div className="col-span-4 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Price</label>
                   <input data-price-input type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => handleUnitPriceChange(index, e.target.value)} onKeyDown={(e) => handlePriceKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  {item.product_id && lastPrices[item.product_id] !== undefined && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const lp = lastPrices[item.product_id]
+                        const newItems = [...items]
+                        newItems[index].unit_price = lp
+                        newItems[index].total_price = lp * newItems[index].quantity
+                        setItems(newItems)
+                      }}
+                      className={`text-xs mt-1 ${item.unit_price === lastPrices[item.product_id] ? 'text-teal-500' : 'text-amber-400 hover:text-amber-300 cursor-pointer'}`}
+                    >
+                      Last: QAR {parseFloat(lastPrices[item.product_id]).toFixed(2)}
+                      {item.unit_price !== lastPrices[item.product_id] && ' (click to apply)'}
+                    </button>
+                  )}
                 </div>
                 <div className="col-span-3 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Total</label>
