@@ -1,15 +1,50 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { Upload, X, Image } from 'lucide-react'
+
+// Convert image to WebP and compress
+async function compressToWebP(file, maxWidth = 800, quality = 0.8) {
+  return new Promise((resolve) => {
+    const img = new window.Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      let width = img.width
+      let height = img.height
+
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width
+        width = maxWidth
+      }
+
+      canvas.width = width
+      canvas.height = height
+
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, width, height)
+
+      canvas.toBlob(
+        (blob) => resolve(blob),
+        'image/webp',
+        quality
+      )
+    }
+    img.src = URL.createObjectURL(file)
+  })
+}
 
 export function ProductForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEditing = Boolean(id)
+  const fileInputRef = useRef(null)
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [categories, setCategories] = useState([])
+  const [imagePreview, setImagePreview] = useState(null)
+  const [imageFile, setImageFile] = useState(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -23,6 +58,7 @@ export function ProductForm() {
     reorder_level: '5',
     barcode: '',
     is_active: true,
+    image_url: '',
   })
 
   useEffect(() => {
@@ -52,12 +88,71 @@ export function ProductForm() {
         reorder_level: data.reorder_level?.toString() || '5',
         barcode: data.barcode || '',
         is_active: data.is_active ?? true,
+        image_url: data.image_url || '',
       })
+      if (data.image_url) setImagePreview(data.image_url)
     } catch (error) {
       console.error('Error fetching product:', error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleImageSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+
+    // Show preview immediately
+    setImagePreview(URL.createObjectURL(file))
+
+    // Convert to WebP
+    setUploading(true)
+    try {
+      const webpBlob = await compressToWebP(file)
+      setImageFile(webpBlob)
+    } catch (error) {
+      console.error('Error compressing image:', error)
+      setImageFile(file)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setImagePreview(null)
+    setImageFile(null)
+    setFormData({ ...formData, image_url: '' })
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const uploadImage = async (productId) => {
+    if (!imageFile) return formData.image_url || null
+
+    const fileName = `${productId}.webp`
+    const filePath = `product-images/${fileName}`
+
+    const { error } = await supabase.storage
+      .from('products')
+      .upload(filePath, imageFile, {
+        contentType: 'image/webp',
+        upsert: true,
+      })
+
+    if (error) {
+      console.error('Upload error:', error)
+      return formData.image_url || null
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('products')
+      .getPublicUrl(filePath)
+
+    return urlData.publicUrl + '?t=' + Date.now()
   }
 
   const handleSubmit = async (e) => {
@@ -79,15 +174,29 @@ export function ProductForm() {
         is_active: formData.is_active,
       }
 
+      let productId = id
+
       if (isEditing) {
         const { error } = await supabase.from('products').update(productData).eq('id', id)
         if (error) throw error
-        navigate(`/products/${id}`)
       } else {
         const { data, error } = await supabase.from('products').insert(productData).select().single()
         if (error) throw error
-        navigate(`/products/${data.id}`)
+        productId = data.id
       }
+
+      // Upload image if changed
+      if (imageFile) {
+        const imageUrl = await uploadImage(productId)
+        if (imageUrl) {
+          await supabase.from('products').update({ image_url: imageUrl }).eq('id', productId)
+        }
+      } else if (!imagePreview && formData.image_url) {
+        // Image was removed
+        await supabase.from('products').update({ image_url: null }).eq('id', productId)
+      }
+
+      navigate(`/products/${productId}`)
     } catch (error) {
       console.error('Error saving product:', error)
       alert('Failed to save product')
@@ -118,6 +227,62 @@ export function ProductForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Product Image */}
+        <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
+          <h2 className="text-lg font-medium text-white mb-4">Product Image</h2>
+          <div className="flex items-start gap-4">
+            {imagePreview ? (
+              <div className="relative">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="w-32 h-32 object-cover rounded-xl border border-zinc-700"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-white hover:bg-red-500"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+                {uploading && (
+                  <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="w-32 h-32 border-2 border-dashed border-zinc-700 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-teal-500 transition-colors"
+              >
+                <Image className="w-8 h-8 text-zinc-600 mb-1" />
+                <span className="text-xs text-zinc-500">Add Image</span>
+              </div>
+            )}
+            <div className="flex-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:bg-zinc-700 transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                {imagePreview ? 'Change Image' : 'Upload Image'}
+              </button>
+              <p className="text-xs text-zinc-500 mt-2">
+                Auto-converted to WebP and compressed. Max 800px width.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
           <h2 className="text-lg font-medium text-white mb-4">Product Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -259,7 +424,7 @@ export function ProductForm() {
           </Link>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading}
             className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-500 hover:to-teal-400 disabled:opacity-50"
           >
             {saving ? 'Saving...' : isEditing ? 'Update Product' : 'Create Product'}

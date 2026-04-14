@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { Plus, Trash2 } from 'lucide-react'
 
 export function PurchaseOrderForm() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const isEditing = Boolean(id)
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [previousStatus, setPreviousStatus] = useState(null)
   const [suppliers, setSuppliers] = useState([])
   const [products, setProducts] = useState([])
 
@@ -66,6 +69,7 @@ export function PurchaseOrderForm() {
         notes: order.notes || '',
         status: order.status,
       })
+      setPreviousStatus(order.status)
 
       if (itemsRes.data?.length) {
         setItems(itemsRes.data.map((item) => ({
@@ -160,6 +164,45 @@ export function PurchaseOrderForm() {
 
       const { error: itemsError } = await supabase.from('purchase_order_items').insert(itemsData)
       if (itemsError) throw itemsError
+
+      // Update stock when status changes to "received"
+      const isNowReceived = formData.status === 'received'
+      const wasNotReceived = previousStatus !== 'received'
+
+      if (isNowReceived && wasNotReceived) {
+        for (const item of validItems) {
+          if (item.product_id) {
+            // Get current stock
+            const { data: prod } = await supabase
+              .from('products')
+              .select('stock_quantity')
+              .eq('id', item.product_id)
+              .single()
+
+            if (prod) {
+              const prevStock = prod.stock_quantity || 0
+              const newStock = prevStock + item.quantity
+
+              // Update product stock
+              await supabase
+                .from('products')
+                .update({ stock_quantity: newStock })
+                .eq('id', item.product_id)
+
+              // Log stock adjustment
+              await supabase.from('stock_adjustments').insert({
+                product_id: item.product_id,
+                adjustment_type: 'add',
+                quantity: item.quantity,
+                previous_stock: prevStock,
+                new_stock: newStock,
+                reason: `PO received: ${formData.supplier_name}`,
+                created_by_email: user?.email || null,
+              }).catch(() => {}) // Ignore if table doesn't exist yet
+            }
+          }
+        }
+      }
 
       navigate(`/purchase-orders/${orderId}`)
     } catch (error) {

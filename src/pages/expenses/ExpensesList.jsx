@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { SearchInput } from '../../components/SearchInput'
 import { useDebounce } from '../../hooks/useDebounce'
+
+const PAGE_SIZE = 20
 
 export function ExpensesList() {
   const [expenses, setExpenses] = useState([])
@@ -10,25 +12,84 @@ export function ExpensesList() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
   const [filter, setFilter] = useState({ category: '', month: '' })
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalAmount, setTotalAmount] = useState(0)
+  const [months, setMonths] = useState([])
 
-  useEffect(() => { fetchExpenses() }, [debouncedSearch])
-
-  const fetchExpenses = async () => {
-    try {
-      setLoading(true)
-      let query = supabase.from('expenses').select('*').order('expense_date', { ascending: false })
-      if (debouncedSearch) {
-        query = query.or(`description.ilike.%${debouncedSearch}%,vendor.ilike.%${debouncedSearch}%`)
+  // Fetch available months once on mount
+  useEffect(() => {
+    const fetchMonths = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('expenses')
+          .select('expense_date')
+          .order('expense_date', { ascending: false })
+        if (error) throw error
+        const uniqueMonths = [...new Set((data || []).map((e) => e.expense_date.substring(0, 7)))].sort().reverse()
+        setMonths(uniqueMonths)
+      } catch (error) {
+        console.error('Error fetching months:', error)
       }
-      const { data, error } = await query
-      if (error) throw error
-      setExpenses(data || [])
-    } catch (error) {
-      console.error('Error fetching expenses:', error)
-    } finally {
-      setLoading(false)
     }
-  }
+    fetchMonths()
+  }, [])
+
+  // Reset page when search or filters change
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch, filter.category, filter.month])
+
+  // Build shared query conditions
+  const applyFilters = useCallback((query) => {
+    if (debouncedSearch) {
+      query = query.or(`description.ilike.%${debouncedSearch}%,vendor.ilike.%${debouncedSearch}%`)
+    }
+    if (filter.category) {
+      query = query.eq('category', filter.category)
+    }
+    if (filter.month) {
+      const [year, month] = filter.month.split('-')
+      const lastDay = new Date(Number(year), Number(month), 0).getDate()
+      query = query.gte('expense_date', `${filter.month}-01`).lte('expense_date', `${filter.month}-${String(lastDay).padStart(2, '0')}`)
+    }
+    return query
+  }, [debouncedSearch, filter.category, filter.month])
+
+  // Fetch paginated expenses + total amount stats
+  useEffect(() => {
+    const fetchExpenses = async () => {
+      try {
+        setLoading(true)
+
+        // Paginated data query
+        let query = supabase
+          .from('expenses')
+          .select('*', { count: 'exact' })
+          .order('expense_date', { ascending: false })
+        query = applyFilters(query)
+        query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+
+        // Stats query for total amount across all filtered rows
+        let statsQuery = supabase.from('expenses').select('amount')
+        statsQuery = applyFilters(statsQuery)
+
+        const [dataResult, statsResult] = await Promise.all([query, statsQuery])
+
+        if (dataResult.error) throw dataResult.error
+        if (statsResult.error) throw statsResult.error
+
+        setExpenses(dataResult.data || [])
+        setTotalCount(dataResult.count || 0)
+        setTotalAmount((statsResult.data || []).reduce((sum, e) => sum + parseFloat(e.amount || 0), 0))
+      } catch (error) {
+        console.error('Error fetching expenses:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchExpenses()
+  }, [debouncedSearch, filter.category, filter.month, page, applyFilters])
 
   const formatDate = (date) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
@@ -47,14 +108,9 @@ export function ExpensesList() {
 
   const paymentMethodLabels = { cash: 'Cash', bank_transfer: 'Bank Transfer', credit_card: 'Credit Card', cheque: 'Cheque' }
 
-  const filteredExpenses = expenses.filter((expense) => {
-    if (filter.category && expense.category !== filter.category) return false
-    if (filter.month && expense.expense_date.substring(0, 7) !== filter.month) return false
-    return true
-  })
-
-  const totalAmount = filteredExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0)
-  const months = [...new Set(expenses.map((e) => e.expense_date.substring(0, 7)))].sort().reverse()
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+  const rangeStart = totalCount === 0 ? 0 : page * PAGE_SIZE + 1
+  const rangeEnd = Math.min((page + 1) * PAGE_SIZE, totalCount)
 
   if (loading) {
     return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
@@ -94,7 +150,7 @@ export function ExpensesList() {
         </div>
       </div>
 
-      {filteredExpenses.length === 0 ? (
+      {expenses.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">No expenses found.</div>
       ) : (
         <>
@@ -112,7 +168,7 @@ export function ExpensesList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {filteredExpenses.map((expense) => (
+                {expenses.map((expense) => (
                   <tr key={expense.id} className="hover:bg-zinc-800/50">
                     <td className="px-6 py-4 text-sm text-zinc-500">{formatDate(expense.expense_date)}</td>
                     <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${categoryLabels[expense.category]?.class || 'bg-zinc-800 text-zinc-300'}`}>{categoryLabels[expense.category]?.label || expense.category}</span></td>
@@ -128,7 +184,7 @@ export function ExpensesList() {
           </div>
 
           <div className="md:hidden space-y-4">
-            {filteredExpenses.map((expense) => (
+            {expenses.map((expense) => (
               <Link key={expense.id} to={`/expenses/${expense.id}/edit`} className="block bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 hover:bg-zinc-800/50 transition-colors">
                 <div className="flex justify-between items-start mb-2">
                   <span className="text-sm text-zinc-500">{formatDate(expense.expense_date)}</span>
@@ -141,6 +197,32 @@ export function ExpensesList() {
                 </div>
               </Link>
             ))}
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="mt-6 bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-sm text-zinc-400">
+              Showing {rangeStart}-{rangeEnd} of {totalCount}
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 text-sm font-medium rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-zinc-400">
+                Page {page + 1} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="px-3 py-1.5 text-sm font-medium rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </>
       )}

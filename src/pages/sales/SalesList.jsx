@@ -10,24 +10,85 @@ export function SalesList() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
-  const [filter, setFilter] = useState({ status: '', payment: '', month: '' })
+  const [filter, setFilter] = useState({ status: '', payment: '', month: '', createdBy: '' })
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const [filterOptions, setFilterOptions] = useState({ months: [], salespeople: [] })
+  const [stats, setStats] = useState({ revenue: 0, total: 0, unpaid: 0 })
+  const PAGE_SIZE = 20
+
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch, filter.status, filter.payment, filter.month, filter.createdBy])
 
   useEffect(() => {
     fetchSales()
-  }, [debouncedSearch])
+  }, [debouncedSearch, page, filter.status, filter.payment, filter.month, filter.createdBy])
+
+  useEffect(() => {
+    fetchFilterOptions()
+  }, [])
+
+  const fetchFilterOptions = async () => {
+    // Fetch distinct months and salespeople for filter dropdowns
+    const { data: allSales } = await supabase
+      .from('sales')
+      .select('sale_date, created_by_email')
+
+    if (allSales) {
+      const months = [...new Set(allSales.map((s) => s.sale_date?.substring(0, 7)).filter(Boolean))].sort().reverse()
+      const salespeople = [...new Set(allSales.map((s) => s.created_by_email).filter(Boolean))].sort()
+      setFilterOptions({ months, salespeople })
+    }
+  }
 
   const fetchSales = async () => {
     try {
       setLoading(true)
-      let query = supabase.from('sales').select('*').order('created_at', { ascending: false })
+
+      // Build filtered query
+      let query = supabase.from('sales').select('*', { count: 'exact' }).order('created_at', { ascending: false })
 
       if (debouncedSearch) {
         query = query.or(`invoice_number.ilike.%${debouncedSearch}%,customer_name.ilike.%${debouncedSearch}%`)
       }
+      if (filter.status) query = query.eq('status', filter.status)
+      if (filter.payment) query = query.eq('payment_status', filter.payment)
+      if (filter.createdBy) query = query.eq('created_by_email', filter.createdBy)
+      if (filter.month) {
+        const [y, m] = filter.month.split('-')
+        const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
+        query = query.gte('sale_date', `${filter.month}-01`).lte('sale_date', `${filter.month}-${String(lastDay).padStart(2, '0')}`)
+      }
 
-      const { data, error } = await query
+      // Paginate
+      query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
+
+      const { data, error, count } = await query
       if (error) throw error
       setSales(data || [])
+      setTotalCount(count || 0)
+
+      // Calculate stats from this filtered set (need a separate count query without pagination)
+      let statsQuery = supabase.from('sales').select('grand_total, status, payment_status')
+      if (debouncedSearch) statsQuery = statsQuery.or(`invoice_number.ilike.%${debouncedSearch}%,customer_name.ilike.%${debouncedSearch}%`)
+      if (filter.status) statsQuery = statsQuery.eq('status', filter.status)
+      if (filter.payment) statsQuery = statsQuery.eq('payment_status', filter.payment)
+      if (filter.createdBy) statsQuery = statsQuery.eq('created_by_email', filter.createdBy)
+      if (filter.month) {
+        const [y, m] = filter.month.split('-')
+        const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
+        statsQuery = statsQuery.gte('sale_date', `${filter.month}-01`).lte('sale_date', `${filter.month}-${String(lastDay).padStart(2, '0')}`)
+      }
+
+      const { data: statsData } = await statsQuery
+      if (statsData) {
+        setStats({
+          revenue: statsData.filter((s) => s.status === 'completed').reduce((sum, s) => sum + parseFloat(s.grand_total || 0), 0),
+          total: statsData.length,
+          unpaid: statsData.filter((s) => s.payment_status === 'unpaid' || s.payment_status === 'partial').length,
+        })
+      }
     } catch (error) {
       console.error('Error fetching sales:', error)
     } finally {
@@ -54,18 +115,9 @@ export function SalesList() {
     unpaid: { label: 'Unpaid', class: 'bg-red-900/50 text-red-400' },
   }
 
-  const months = [...new Set(sales.map((s) => s.sale_date?.substring(0, 7)).filter(Boolean))].sort().reverse()
-
-  const filteredSales = sales.filter((s) => {
-    if (filter.status && s.status !== filter.status) return false
-    if (filter.payment && s.payment_status !== filter.payment) return false
-    if (filter.month && s.sale_date?.substring(0, 7) !== filter.month) return false
-    return true
-  })
-
-  const totalRevenue = filteredSales.filter((s) => s.status === 'completed').reduce((sum, s) => sum + parseFloat(s.grand_total || 0), 0)
-  const totalSales = filteredSales.length
-  const unpaidCount = filteredSales.filter((s) => s.payment_status === 'unpaid' || s.payment_status === 'partial').length
+  const totalRevenue = stats.revenue
+  const totalSales = stats.total
+  const unpaidCount = stats.unpaid
 
   if (loading) {
     return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
@@ -114,7 +166,7 @@ export function SalesList() {
       </div>
 
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-1">Status</label>
             <select value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
@@ -137,15 +189,24 @@ export function SalesList() {
             <label className="block text-sm font-medium text-zinc-300 mb-1">Month</label>
             <select value={filter.month} onChange={(e) => setFilter({ ...filter, month: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
               <option value="">All</option>
-              {months.map((m) => (
+              {filterOptions.months.map((m) => (
                 <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">Sold By</label>
+            <select value={filter.createdBy} onChange={(e) => setFilter({ ...filter, createdBy: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+              <option value="">All</option>
+              {filterOptions.salespeople.map((sp) => (
+                <option key={sp} value={sp}>{sp}</option>
               ))}
             </select>
           </div>
         </div>
       </div>
 
-      {filteredSales.length === 0 ? (
+      {sales.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
           No sales found. Create your first sale!
         </div>
@@ -158,6 +219,7 @@ export function SalesList() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Invoice</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Customer</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Sold By</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Payment</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-zinc-500 uppercase">Total</th>
@@ -165,11 +227,12 @@ export function SalesList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {filteredSales.map((sale) => (
+                {sales.map((sale) => (
                   <tr key={sale.id} className="hover:bg-zinc-800/50">
                     <td className="px-6 py-4 text-sm font-medium text-teal-400">{sale.invoice_number}</td>
                     <td className="px-6 py-4 text-sm text-zinc-400">{formatDate(sale.sale_date)}</td>
                     <td className="px-6 py-4 text-sm text-zinc-300">{sale.customer_name || 'Walk-in'}</td>
+                    <td className="px-6 py-4 text-sm text-zinc-400">{sale.created_by_email ? sale.created_by_email.split('@')[0] : '-'}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <span className="text-xs text-zinc-400">{paymentLabels[sale.payment_method]}</span>
@@ -194,7 +257,7 @@ export function SalesList() {
           </div>
 
           <div className="md:hidden space-y-4">
-            {filteredSales.map((sale) => (
+            {sales.map((sale) => (
               <Link key={sale.id} to={`/sales/${sale.id}`} className="block bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 hover:bg-zinc-800/50 transition-colors">
                 <div className="flex justify-between items-start mb-2">
                   <div>
@@ -205,7 +268,10 @@ export function SalesList() {
                     {statusLabels[sale.status]?.label}
                   </span>
                 </div>
-                <p className="text-zinc-200">{sale.customer_name || 'Walk-in'}</p>
+                <div className="flex justify-between items-center">
+                  <p className="text-zinc-200">{sale.customer_name || 'Walk-in'}</p>
+                  {sale.created_by_email && <span className="text-xs text-zinc-500">{sale.created_by_email.split('@')[0]}</span>}
+                </div>
                 <div className="flex justify-between items-center mt-2">
                   <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${paymentStatusLabels[sale.payment_status]?.class}`}>
                     {paymentStatusLabels[sale.payment_status]?.label}
@@ -215,6 +281,34 @@ export function SalesList() {
               </Link>
             ))}
           </div>
+
+          {/* Pagination */}
+          {totalCount > PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-zinc-500">
+                Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage(page - 1)}
+                  disabled={page === 0}
+                  className="px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1.5 text-sm text-zinc-400">
+                  Page {page + 1} of {Math.ceil(totalCount / PAGE_SIZE)}
+                </span>
+                <button
+                  onClick={() => setPage(page + 1)}
+                  disabled={(page + 1) * PAGE_SIZE >= totalCount}
+                  className="px-3 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

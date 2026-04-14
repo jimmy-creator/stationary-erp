@@ -125,6 +125,7 @@ export function SaleView() {
           <h3 className="text-sm font-medium text-zinc-500 uppercase mb-2">Customer</h3>
           <p className="text-zinc-200 font-medium">{sale.customer_name || 'Walk-in Customer'}</p>
           <p className="text-sm text-zinc-400">Payment: {paymentLabels[sale.payment_method]}</p>
+          {sale.created_by_email && <p className="text-sm text-zinc-400">Sold by: {sale.created_by_email}</p>}
         </div>
 
         {/* Items */}

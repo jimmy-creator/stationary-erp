@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { Plus, Trash2 } from 'lucide-react'
 
 export function SaleForm() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const isEditing = Boolean(id)
 
   const [loading, setLoading] = useState(false)
@@ -139,6 +141,19 @@ export function SaleForm() {
       return
     }
 
+    // Stock check — only for new sales
+    if (!isEditing) {
+      for (const item of validItems) {
+        if (item.product_id) {
+          const product = products.find((p) => p.id === item.product_id)
+          if (product && item.quantity > product.stock_quantity) {
+            alert(`Insufficient stock for "${product.name}". Available: ${product.stock_quantity}, Requested: ${item.quantity}`)
+            return
+          }
+        }
+      }
+    }
+
     setSaving(true)
     try {
       const saleData = {
@@ -158,6 +173,7 @@ export function SaleForm() {
           : (parseFloat(formData.amount_paid) || 0),
         notes: formData.notes || null,
         status: formData.status,
+        created_by_email: isEditing ? undefined : (user?.email || null),
       }
 
       let saleId = id
@@ -265,7 +281,7 @@ export function SaleForm() {
                   <label className="block text-xs text-zinc-400 mb-1">Product</label>
                   <select value={item.product_id} onChange={(e) => handleProductChange(index, e.target.value)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
                     <option value="">Select product</option>
-                    {products.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.stock_quantity} {p.unit})</option>)}
+                    {products.map((p) => <option key={p.id} value={p.id} disabled={p.stock_quantity <= 0}>{p.name} ({p.stock_quantity} {p.unit}){p.stock_quantity <= 0 ? ' - OUT OF STOCK' : ''}</option>)}
                   </select>
                 </div>
                 <div className="col-span-4 md:col-span-2">

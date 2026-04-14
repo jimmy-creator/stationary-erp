@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { Package, AlertTriangle, CheckCircle, Archive } from 'lucide-react'
+import { Package, AlertTriangle, CheckCircle, Archive, ChevronLeft, ChevronRight } from 'lucide-react'
 import { SearchInput } from '../../components/SearchInput'
 import { useDebounce } from '../../hooks/useDebounce'
+
+const PAGE_SIZE = 20
 
 export function ProductsList() {
   const [products, setProducts] = useState([])
@@ -12,31 +14,83 @@ export function ProductsList() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
   const [filter, setFilter] = useState({ category: '', stock: '' })
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+
+  // Summary stats from a separate count query (reflects full filtered set, not just current page)
+  const [stats, setStats] = useState({ total: 0, lowStock: 0, outOfStock: 0 })
+
+  // Reset page when search or category filter changes
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch, filter.category])
 
   useEffect(() => {
     fetchData()
-  }, [debouncedSearch])
+  }, [debouncedSearch, filter.category, page])
+
+  // Fetch categories once on mount
+  useEffect(() => {
+    supabase
+      .from('categories')
+      .select('*')
+      .order('name')
+      .then(({ data }) => setCategories(data || []))
+  }, [])
+
+  // Fetch summary stats whenever search or category filter changes (independent of page)
+  useEffect(() => {
+    fetchStats()
+  }, [debouncedSearch, filter.category])
+
+  const buildBaseQuery = (selectClause, opts = {}) => {
+    let query = supabase
+      .from('products')
+      .select(selectClause, opts)
+
+    if (debouncedSearch) {
+      query = query.or(
+        `name.ilike.%${debouncedSearch}%,sku.ilike.%${debouncedSearch}%,brand.ilike.%${debouncedSearch}%`
+      )
+    }
+
+    if (filter.category) {
+      query = query.eq('category_id', filter.category)
+    }
+
+    return query
+  }
+
+  const fetchStats = async () => {
+    try {
+      // Fetch all products matching search + category filter (no pagination) to compute stats
+      const { data, error } = await buildBaseQuery('id, stock_quantity, reorder_level')
+      if (error) throw error
+
+      const all = data || []
+      setStats({
+        total: all.length,
+        lowStock: all.filter((p) => p.stock_quantity > 0 && p.stock_quantity <= p.reorder_level).length,
+        outOfStock: all.filter((p) => p.stock_quantity <= 0).length,
+      })
+    } catch (error) {
+      console.error('Error fetching stats:', error)
+    }
+  }
 
   const fetchData = async () => {
     try {
       setLoading(true)
-      let query = supabase
-        .from('products')
-        .select('*, categories(name)')
+
+      const query = buildBaseQuery('*, categories(name)', { count: 'exact' })
         .order('created_at', { ascending: false })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
-      if (debouncedSearch) {
-        query = query.or(`name.ilike.%${debouncedSearch}%,sku.ilike.%${debouncedSearch}%,brand.ilike.%${debouncedSearch}%`)
-      }
+      const { data, error, count } = await query
+      if (error) throw error
 
-      const [productsRes, categoriesRes] = await Promise.all([
-        query,
-        supabase.from('categories').select('*').order('name'),
-      ])
-
-      if (productsRes.error) throw productsRes.error
-      setProducts(productsRes.data || [])
-      setCategories(categoriesRes.data || [])
+      setProducts(data || [])
+      setTotalCount(count ?? 0)
     } catch (error) {
       console.error('Error fetching products:', error)
     } finally {
@@ -48,17 +102,17 @@ export function ProductsList() {
     return `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
   }
 
+  // Stock filter is kept client-side because "low stock" depends on per-product reorder_level
   const filteredProducts = products.filter((p) => {
-    if (filter.category && p.category_id !== filter.category) return false
-    if (filter.stock === 'low' && p.stock_quantity > p.reorder_level) return false
+    if (filter.stock === 'low' && !(p.stock_quantity > 0 && p.stock_quantity <= p.reorder_level)) return false
     if (filter.stock === 'out' && p.stock_quantity > 0) return false
     if (filter.stock === 'in' && p.stock_quantity <= 0) return false
     return true
   })
 
-  const totalProducts = products.length
-  const lowStockCount = products.filter((p) => p.stock_quantity > 0 && p.stock_quantity <= p.reorder_level).length
-  const outOfStockCount = products.filter((p) => p.stock_quantity <= 0).length
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const rangeStart = page * PAGE_SIZE + 1
+  const rangeEnd = Math.min((page + 1) * PAGE_SIZE, totalCount)
 
   if (loading) {
     return (
@@ -92,7 +146,7 @@ export function ProductsList() {
               <Package className="w-5 h-5 text-teal-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{totalProducts}</p>
+              <p className="text-2xl font-bold text-white">{stats.total}</p>
               <p className="text-xs text-zinc-500">Total Products</p>
             </div>
           </div>
@@ -103,7 +157,7 @@ export function ProductsList() {
               <AlertTriangle className="w-5 h-5 text-orange-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{lowStockCount}</p>
+              <p className="text-2xl font-bold text-white">{stats.lowStock}</p>
               <p className="text-xs text-zinc-500">Low Stock</p>
             </div>
           </div>
@@ -114,7 +168,7 @@ export function ProductsList() {
               <Archive className="w-5 h-5 text-red-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white">{outOfStockCount}</p>
+              <p className="text-2xl font-bold text-white">{stats.outOfStock}</p>
               <p className="text-xs text-zinc-500">Out of Stock</p>
             </div>
           </div>
@@ -180,8 +234,19 @@ export function ProductsList() {
                   return (
                     <tr key={product.id} className="hover:bg-zinc-800/50">
                       <td className="px-6 py-4">
-                        <p className="text-sm font-medium text-white">{product.name}</p>
-                        <p className="text-xs text-zinc-500">{product.sku}</p>
+                        <div className="flex items-center gap-3">
+                          {product.image_url ? (
+                            <img src={product.image_url} alt="" className="w-10 h-10 object-cover rounded-lg border border-zinc-700 shrink-0" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
+                              <Package className="w-4 h-4 text-zinc-600" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-sm font-medium text-white">{product.name}</p>
+                            <p className="text-xs text-zinc-500">{product.sku}</p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-zinc-300">
                         {product.categories?.name || '-'}
@@ -247,6 +312,36 @@ export function ProductsList() {
             })}
           </div>
         </>
+      )}
+
+      {/* Pagination Controls */}
+      {totalCount > 0 && (
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6">
+          <p className="text-sm text-zinc-400">
+            Showing {rangeStart}-{rangeEnd} of {totalCount}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="flex items-center gap-1 px-3 py-2 text-sm rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </button>
+            <span className="text-sm text-zinc-400 px-2">
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="flex items-center gap-1 px-3 py-2 text-sm rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

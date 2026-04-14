@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { Package, Clock, CheckCircle } from 'lucide-react'
+import { Package, Clock, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { SearchInput } from '../../components/SearchInput'
 import { useDebounce } from '../../hooks/useDebounce'
+
+const PAGE_SIZE = 20
 
 export function PurchaseOrdersList() {
   const [orders, setOrders] = useState([])
@@ -11,27 +13,99 @@ export function PurchaseOrdersList() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
   const [filter, setFilter] = useState({ status: '', month: '' })
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
+  const [months, setMonths] = useState([])
+  const [stats, setStats] = useState({ totalOrders: 0, pendingOrders: 0, totalValue: 0 })
 
+  // Reset page when search or filters change
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch, filter.status, filter.month])
+
+  // Fetch available months once on mount
+  useEffect(() => {
+    fetchMonths()
+  }, [])
+
+  // Fetch orders whenever page, search, or filters change
   useEffect(() => {
     fetchOrders()
-  }, [debouncedSearch])
+    fetchStats()
+  }, [page, debouncedSearch, filter.status, filter.month])
+
+  const applyFilters = (query) => {
+    if (debouncedSearch) {
+      query = query.or(`po_number.ilike.%${debouncedSearch}%,supplier_name.ilike.%${debouncedSearch}%`)
+    }
+    if (filter.status) {
+      query = query.eq('status', filter.status)
+    }
+    if (filter.month) {
+      const [year, month] = filter.month.split('-')
+      const startDate = `${year}-${month}-01`
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate()
+      const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`
+      query = query.gte('po_date', startDate).lte('po_date', endDate)
+    }
+    return query
+  }
+
+  const fetchMonths = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('purchase_orders')
+        .select('po_date')
+        .not('po_date', 'is', null)
+        .order('po_date', { ascending: false })
+      if (error) throw error
+      const uniqueMonths = [...new Set((data || []).map((o) => o.po_date?.substring(0, 7)).filter(Boolean))].sort().reverse()
+      setMonths(uniqueMonths)
+    } catch (error) {
+      console.error('Error fetching months:', error)
+    }
+  }
 
   const fetchOrders = async () => {
     try {
       setLoading(true)
-      let query = supabase.from('purchase_orders').select('*').order('created_at', { ascending: false })
+      let query = supabase
+        .from('purchase_orders')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
 
-      if (debouncedSearch) {
-        query = query.or(`po_number.ilike.%${debouncedSearch}%,supplier_name.ilike.%${debouncedSearch}%`)
-      }
+      query = applyFilters(query)
+      query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
-      const { data, error } = await query
+      const { data, error, count } = await query
       if (error) throw error
       setOrders(data || [])
+      setTotalCount(count || 0)
     } catch (error) {
       console.error('Error fetching purchase orders:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchStats = async () => {
+    try {
+      let query = supabase
+        .from('purchase_orders')
+        .select('status, grand_total')
+
+      query = applyFilters(query)
+
+      const { data, error } = await query
+      if (error) throw error
+      const all = data || []
+      setStats({
+        totalOrders: all.length,
+        pendingOrders: all.filter((o) => ['draft', 'sent', 'confirmed'].includes(o.status)).length,
+        totalValue: all.reduce((sum, o) => sum + parseFloat(o.grand_total || 0), 0),
+      })
+    } catch (error) {
+      console.error('Error fetching stats:', error)
     }
   }
 
@@ -46,19 +120,11 @@ export function PurchaseOrdersList() {
     cancelled: { label: 'Cancelled', class: 'bg-red-900/50 text-red-400' },
   }
 
-  const months = [...new Set(orders.map((o) => o.po_date?.substring(0, 7)).filter(Boolean))].sort().reverse()
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+  const rangeStart = totalCount === 0 ? 0 : page * PAGE_SIZE + 1
+  const rangeEnd = Math.min((page + 1) * PAGE_SIZE, totalCount)
 
-  const filteredOrders = orders.filter((order) => {
-    if (filter.status && order.status !== filter.status) return false
-    if (filter.month && order.po_date?.substring(0, 7) !== filter.month) return false
-    return true
-  })
-
-  const totalOrders = filteredOrders.length
-  const pendingOrders = filteredOrders.filter((o) => ['draft', 'sent', 'confirmed'].includes(o.status)).length
-  const totalValue = filteredOrders.reduce((sum, o) => sum + parseFloat(o.grand_total || 0), 0)
-
-  if (loading) {
+  if (loading && orders.length === 0) {
     return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
   }
 
@@ -79,18 +145,18 @@ export function PurchaseOrdersList() {
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-teal-500/20 flex items-center justify-center"><Package className="w-5 h-5 text-teal-400" /></div>
-            <div><p className="text-2xl font-bold text-white">{totalOrders}</p><p className="text-xs text-zinc-500">Total</p></div>
+            <div><p className="text-2xl font-bold text-white">{stats.totalOrders}</p><p className="text-xs text-zinc-500">Total</p></div>
           </div>
         </div>
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center"><Clock className="w-5 h-5 text-orange-400" /></div>
-            <div><p className="text-2xl font-bold text-white">{pendingOrders}</p><p className="text-xs text-zinc-500">Pending</p></div>
+            <div><p className="text-2xl font-bold text-white">{stats.pendingOrders}</p><p className="text-xs text-zinc-500">Pending</p></div>
           </div>
         </div>
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
           <p className="text-sm text-zinc-500">Total Value</p>
-          <p className="text-lg font-bold text-white">{formatCurrency(totalValue)}</p>
+          <p className="text-lg font-bold text-white">{formatCurrency(stats.totalValue)}</p>
         </div>
       </div>
 
@@ -113,7 +179,7 @@ export function PurchaseOrdersList() {
         </div>
       </div>
 
-      {filteredOrders.length === 0 ? (
+      {orders.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">No purchase orders found.</div>
       ) : (
         <>
@@ -130,7 +196,7 @@ export function PurchaseOrdersList() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {filteredOrders.map((order) => (
+                {orders.map((order) => (
                   <tr key={order.id} className="hover:bg-zinc-800/50">
                     <td className="px-6 py-4 text-sm font-medium text-teal-400">{order.po_number}</td>
                     <td className="px-6 py-4 text-sm text-zinc-400">{formatDate(order.po_date)}</td>
@@ -145,7 +211,7 @@ export function PurchaseOrdersList() {
           </div>
 
           <div className="md:hidden space-y-4">
-            {filteredOrders.map((order) => (
+            {orders.map((order) => (
               <Link key={order.id} to={`/purchase-orders/${order.id}`} className="block bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 hover:bg-zinc-800/50 transition-colors">
                 <div className="flex justify-between items-start mb-2">
                   <div><p className="font-medium text-teal-400">{order.po_number}</p><p className="text-xs text-zinc-500">{formatDate(order.po_date)}</p></div>
@@ -156,6 +222,36 @@ export function PurchaseOrdersList() {
               </Link>
             ))}
           </div>
+
+          {/* Pagination controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+              <p className="text-sm text-zinc-500">
+                Showing {rangeStart}-{rangeEnd} of {totalCount}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                <span className="text-sm text-zinc-400 px-2">
+                  Page {page + 1} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
