@@ -25,6 +25,7 @@ export function PurchaseOrderForm() {
     supplier_email: '',
     discount_percentage: '0',
     tax_percentage: '0',
+    cargo_charges: '0',
     payment_terms: '',
     notes: '',
     status: 'draft',
@@ -64,7 +65,8 @@ export function PurchaseOrderForm() {
         supplier_phone: order.supplier_phone || '',
         supplier_email: order.supplier_email || '',
         discount_percentage: order.discount_percentage?.toString() || '0',
-        tax_percentage: order.tax_percentage?.toString() || '15',
+        tax_percentage: order.tax_percentage?.toString() || '0',
+        cargo_charges: order.cargo_charges?.toString() || '0',
         payment_terms: order.payment_terms || '',
         notes: order.notes || '',
         status: order.status,
@@ -123,7 +125,8 @@ export function PurchaseOrderForm() {
   const discountAmount = subtotal * (parseFloat(formData.discount_percentage) || 0) / 100
   const afterDiscount = subtotal - discountAmount
   const taxAmount = afterDiscount * (parseFloat(formData.tax_percentage) || 0) / 100
-  const grandTotal = afterDiscount + taxAmount
+  const cargoCharges = parseFloat(formData.cargo_charges) || 0
+  const grandTotal = afterDiscount + taxAmount + cargoCharges
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -141,7 +144,7 @@ export function PurchaseOrderForm() {
         supplier_email: formData.supplier_email || null,
         subtotal, discount_percentage: parseFloat(formData.discount_percentage) || 0,
         discount_amount: discountAmount, tax_percentage: parseFloat(formData.tax_percentage) || 0,
-        tax_amount: taxAmount, grand_total: grandTotal,
+        tax_amount: taxAmount, cargo_charges: cargoCharges, grand_total: grandTotal,
         payment_terms: formData.payment_terms || null,
         notes: formData.notes || null, status: formData.status,
       }
@@ -165,43 +168,61 @@ export function PurchaseOrderForm() {
       const { error: itemsError } = await supabase.from('purchase_order_items').insert(itemsData)
       if (itemsError) throw itemsError
 
-      // Update stock when status changes to "received"
-      const isNowReceived = formData.status === 'received'
-      const wasNotReceived = previousStatus !== 'received'
+      // Update stock when status changes to "received" — wrapped separately so it can't break the save
+      try {
+        const isNowReceived = formData.status === 'received'
+        const wasNotReceived = previousStatus !== 'received'
 
-      if (isNowReceived && wasNotReceived) {
-        for (const item of validItems) {
-          if (item.product_id) {
-            // Get current stock
-            const { data: prod } = await supabase
-              .from('products')
-              .select('stock_quantity')
-              .eq('id', item.product_id)
-              .single()
+        if (isNowReceived && wasNotReceived) {
+          // Calculate cargo share per item (proportional to item value)
+          const poSubtotal = validItems.reduce((s, i) => s + i.total_price, 0)
+          const poCargoCharges = parseFloat(formData.cargo_charges) || 0
 
-            if (prod) {
-              const prevStock = prod.stock_quantity || 0
-              const newStock = prevStock + item.quantity
-
-              // Update product stock
-              await supabase
+          for (const item of validItems) {
+            if (item.product_id) {
+              const { data: prod } = await supabase
                 .from('products')
-                .update({ stock_quantity: newStock })
+                .select('stock_quantity, cost_price')
                 .eq('id', item.product_id)
+                .single()
 
-              // Log stock adjustment
-              await supabase.from('stock_adjustments').insert({
-                product_id: item.product_id,
-                adjustment_type: 'add',
-                quantity: item.quantity,
-                previous_stock: prevStock,
-                new_stock: newStock,
-                reason: `PO received: ${formData.supplier_name}`,
-                created_by_email: user?.email || null,
-              }).catch(() => {}) // Ignore if table doesn't exist yet
+              if (prod) {
+                const prevStock = prod.stock_quantity || 0
+                const newStock = prevStock + item.quantity
+
+                // Calculate landed cost per unit (item cost + proportional cargo)
+                const cargoShare = poSubtotal > 0
+                  ? (item.total_price / poSubtotal) * poCargoCharges
+                  : 0
+                const landedCostPerUnit = item.unit_price + (cargoShare / item.quantity)
+
+                // Weighted average cost: blend existing stock cost with new landed cost
+                const existingCost = parseFloat(prod.cost_price) || 0
+                const weightedCost = prevStock > 0
+                  ? ((existingCost * prevStock) + (landedCostPerUnit * item.quantity)) / newStock
+                  : landedCostPerUnit
+                const newCostPrice = Math.round(weightedCost * 100) / 100
+
+                await supabase
+                  .from('products')
+                  .update({ stock_quantity: newStock, cost_price: newCostPrice })
+                  .eq('id', item.product_id)
+
+                await supabase.from('stock_adjustments').insert({
+                  product_id: item.product_id,
+                  adjustment_type: 'add',
+                  quantity: item.quantity,
+                  previous_stock: prevStock,
+                  new_stock: newStock,
+                  reason: `PO received: ${formData.supplier_name}` + (poCargoCharges > 0 ? ` (landed cost: ${newCostPrice})` : ''),
+                  created_by_email: user?.email || null,
+                }).catch(() => {})
+              }
             }
           }
         }
+      } catch (stockError) {
+        console.error('Stock update error (PO saved successfully):', stockError)
       }
 
       navigate(`/purchase-orders/${orderId}`)
@@ -306,6 +327,13 @@ export function PurchaseOrderForm() {
                 <div className="flex items-center gap-1">
                   <input type="number" min="0" max="100" step="0.1" value={formData.tax_percentage} onChange={(e) => setFormData({ ...formData, tax_percentage: e.target.value })} className="w-16 bg-zinc-700/50 border border-zinc-600 rounded text-white text-sm text-right px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500" />
                   <span className="text-zinc-500 text-xs">%</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-sm gap-2">
+                <span className="text-zinc-400">Cargo:</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-zinc-500 text-xs">QAR</span>
+                  <input type="number" min="0" step="0.01" value={formData.cargo_charges} onChange={(e) => setFormData({ ...formData, cargo_charges: e.target.value })} className="w-20 bg-zinc-700/50 border border-zinc-600 rounded text-white text-sm text-right px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500" />
                 </div>
               </div>
               <div className="flex justify-between text-lg font-bold border-t border-zinc-700 pt-2">

@@ -145,6 +145,7 @@ export function PurchaseOrderView() {
               <div className="flex justify-between text-sm"><span className="text-zinc-400">Subtotal:</span><span className="text-zinc-200">{formatCurrency(order.subtotal)}</span></div>
               {order.discount_amount > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Discount ({order.discount_percentage}%):</span><span className="text-red-400">-{formatCurrency(order.discount_amount)}</span></div>}
               {order.tax_amount > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">VAT ({order.tax_percentage}%):</span><span className="text-zinc-200">{formatCurrency(order.tax_amount)}</span></div>}
+              {order.cargo_charges > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cargo Charges:</span><span className="text-zinc-200">{formatCurrency(order.cargo_charges)}</span></div>}
               <div className="flex justify-between text-lg font-bold border-t border-zinc-800 pt-2">
                 <span className="text-zinc-200">Grand Total:</span>
                 <span className="text-teal-400">{formatCurrency(order.grand_total)}</span>
