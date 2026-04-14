@@ -1,0 +1,278 @@
+@import "tailwindcss";
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #09090b;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 161, 170, 0.5);
+}
+
+/* Glass effect utility */
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #2dd4bf, #14b8a6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glow effects */
+.glow-teal {
+  box-shadow: 0 0 20px rgba(20, 184, 166, 0.15);
+}
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+}
+
+/* Smooth transitions */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Print styles */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 10mm;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-size: 11pt;
+    line-height: 1.4;
+    color: #111;
+    background: white;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area, .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  .md\:hidden {
+    display: none !important;
+  }
+
+  .hidden.md\:block {
+    display: block !important;
+  }
+
+  .print-area .shadow,
+  .print-area .rounded-lg,
+  .print-area .rounded-xl {
+    box-shadow: none !important;
+  }
+
+  /* Force light theme on all print area elements */
+  .print-area {
+    color: #111827 !important;
+    background: white !important;
+  }
+
+  .print-area * {
+    color: inherit;
+    border-color: #e5e7eb !important;
+  }
+
+  .print-area [class*="bg-zinc"],
+  .print-area [class*="bg-slate-900"],
+  .print-area [class*="bg-slate-800"] {
+    background: transparent !important;
+  }
+
+  .print-area h1,
+  .print-area strong,
+  .print-area .font-bold {
+    color: #111827 !important;
+  }
+
+  .print-area h3 {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280 !important;
+    font-weight: 600;
+  }
+
+  .print-area p,
+  .print-area span,
+  .print-area td,
+  .print-area th {
+    color: #374151 !important;
+  }
+
+  .print-area .text-white,
+  .print-area [class*="text-zinc-200"],
+  .print-area [class*="text-zinc-300"] {
+    color: #111827 !important;
+  }
+
+  .print-area [class*="text-zinc-400"],
+  .print-area [class*="text-zinc-500"] {
+    color: #6b7280 !important;
+  }
+
+  .print-area [class*="text-zinc-600"] {
+    color: #9ca3af !important;
+  }
+
+  .print-area [class*="text-teal-600"],
+  .print-area [class*="text-teal-400"] {
+    color: #0d9488 !important;
+  }
+
+  .print-area [class*="text-red-600"],
+  .print-area [class*="text-red-400"] {
+    color: #dc2626 !important;
+  }
+
+  .print-area [class*="text-green-600"],
+  .print-area [class*="text-green-400"] {
+    color: #16a34a !important;
+  }
+
+  /* Print badge overrides - force light backgrounds */
+  .print-area .rounded-full {
+    border: 1px solid #d1d5db !important;
+    background: #f9fafb !important;
+  }
+
+  .print-area .rounded-full[class*="bg-green"] {
+    background: #dcfce7 !important;
+    color: #166534 !important;
+    border-color: #bbf7d0 !important;
+  }
+
+  .print-area .rounded-full[class*="bg-teal"] {
+    background: #ccfbf1 !important;
+    color: #115e59 !important;
+    border-color: #99f6e4 !important;
+  }
+
+  .print-area .rounded-full[class*="bg-red"] {
+    background: #fee2e2 !important;
+    color: #991b1b !important;
+    border-color: #fecaca !important;
+  }
+
+  .print-area .rounded-full[class*="bg-yellow"] {
+    background: #fef9c3 !important;
+    color: #854d0e !important;
+    border-color: #fef08a !important;
+  }
+
+  .print-area .rounded-full[class*="bg-orange"] {
+    background: #ffedd5 !important;
+    color: #9a3412 !important;
+    border-color: #fed7aa !important;
+  }
+
+  .print-area .rounded-full[class*="bg-purple"] {
+    background: #f3e8ff !important;
+    color: #6b21a8 !important;
+    border-color: #e9d5ff !important;
+  }
+
+  .print-area .rounded-full[class*="bg-zinc"] {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  /* Print border overrides */
+  .print-area [class*="border-zinc-800"],
+  .print-area [class*="border-zinc-700"] {
+    border-color: #e5e7eb !important;
+  }
+
+  .print-area .border-t[class*="border-zinc"] {
+    border-color: #d1d5db !important;
+  }
+
+  /* Signature lines */
+  .print-area .border-t.border-zinc-700 {
+    border-top: 1.5px solid #000 !important;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  table th {
+    background-color: #f3f4f6 !important;
+    font-weight: 600;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 6px 10px;
+    border-bottom: 2px solid #d1d5db !important;
+    color: #6b7280 !important;
+  }
+
+  table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e5e7eb !important;
+    font-size: 10pt;
+    color: #374151 !important;
+  }
+
+  .print-area h1 {
+    font-size: 18pt;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #111827 !important;
+  }
+
+  /* Terms numbered circles */
+  .print-area [class*="bg-teal-500\\/10"] {
+    background: #ccfbf1 !important;
+    color: #115e59 !important;
+  }
+
+  /* Totals section */
+  .print-area [class*="text-teal-600"] {
+    color: #0d9488 !important;
+  }
+
+  .border-b {
+    break-inside: avoid;
+  }
+}

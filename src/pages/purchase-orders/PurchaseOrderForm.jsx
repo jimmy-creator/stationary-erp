@@ -1,0 +1,298 @@
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate, Link } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
+import { Plus, Trash2 } from 'lucide-react'
+
+export function PurchaseOrderForm() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const isEditing = Boolean(id)
+
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [suppliers, setSuppliers] = useState([])
+  const [products, setProducts] = useState([])
+
+  const [formData, setFormData] = useState({
+    po_date: new Date().toISOString().split('T')[0],
+    expected_delivery_date: '',
+    supplier_id: '',
+    supplier_name: '',
+    supplier_phone: '',
+    supplier_email: '',
+    discount_percentage: '0',
+    tax_percentage: '0',
+    payment_terms: '',
+    notes: '',
+    status: 'draft',
+  })
+
+  const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit: 'Pcs', unit_price: 0, total_price: 0 }])
+
+  useEffect(() => {
+    fetchData()
+    if (isEditing) fetchOrder()
+  }, [id])
+
+  const fetchData = async () => {
+    const [suppliersRes, productsRes] = await Promise.all([
+      supabase.from('suppliers').select('*').eq('is_active', true).order('name'),
+      supabase.from('products').select('id, name, cost_price, unit').eq('is_active', true).order('name'),
+    ])
+    setSuppliers(suppliersRes.data || [])
+    setProducts(productsRes.data || [])
+  }
+
+  const fetchOrder = async () => {
+    setLoading(true)
+    try {
+      const [orderRes, itemsRes] = await Promise.all([
+        supabase.from('purchase_orders').select('*').eq('id', id).single(),
+        supabase.from('purchase_order_items').select('*').eq('po_id', id),
+      ])
+      if (orderRes.error) throw orderRes.error
+      const order = orderRes.data
+
+      setFormData({
+        po_date: order.po_date,
+        expected_delivery_date: order.expected_delivery_date || '',
+        supplier_id: order.supplier_id || '',
+        supplier_name: order.supplier_name,
+        supplier_phone: order.supplier_phone || '',
+        supplier_email: order.supplier_email || '',
+        discount_percentage: order.discount_percentage?.toString() || '0',
+        tax_percentage: order.tax_percentage?.toString() || '15',
+        payment_terms: order.payment_terms || '',
+        notes: order.notes || '',
+        status: order.status,
+      })
+
+      if (itemsRes.data?.length) {
+        setItems(itemsRes.data.map((item) => ({
+          id: item.id, product_id: item.product_id || '', product_name: item.product_name,
+          quantity: item.quantity, unit: item.unit || 'Pcs', unit_price: item.unit_price, total_price: item.total_price,
+        })))
+      }
+    } catch (error) {
+      console.error('Error fetching order:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSupplierChange = (supplierId) => {
+    const supplier = suppliers.find((s) => s.id === supplierId)
+    setFormData({
+      ...formData,
+      supplier_id: supplierId,
+      supplier_name: supplier?.name || '',
+      supplier_phone: supplier?.phone || '',
+      supplier_email: supplier?.email || '',
+    })
+  }
+
+  const handleProductChange = (index, productId) => {
+    const product = products.find((p) => p.id === productId)
+    const newItems = [...items]
+    newItems[index] = {
+      ...newItems[index],
+      product_id: productId,
+      product_name: product?.name || '',
+      unit: product?.unit || 'Pcs',
+      unit_price: product?.cost_price || 0,
+      total_price: (product?.cost_price || 0) * newItems[index].quantity,
+    }
+    setItems(newItems)
+  }
+
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...items]
+    newItems[index][field] = field === 'quantity' ? (parseInt(value) || 0) : (parseFloat(value) || 0)
+    newItems[index].total_price = newItems[index].unit_price * newItems[index].quantity
+    setItems(newItems)
+  }
+
+  const addItem = () => setItems([...items, { product_id: '', product_name: '', quantity: 1, unit: 'Pcs', unit_price: 0, total_price: 0 }])
+  const removeItem = (index) => { if (items.length > 1) setItems(items.filter((_, i) => i !== index)) }
+
+  const subtotal = items.reduce((sum, item) => sum + item.total_price, 0)
+  const discountAmount = subtotal * (parseFloat(formData.discount_percentage) || 0) / 100
+  const afterDiscount = subtotal - discountAmount
+  const taxAmount = afterDiscount * (parseFloat(formData.tax_percentage) || 0) / 100
+  const grandTotal = afterDiscount + taxAmount
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const validItems = items.filter((item) => item.product_name && item.quantity > 0)
+    if (validItems.length === 0) { alert('Please add at least one item'); return }
+
+    setSaving(true)
+    try {
+      const orderData = {
+        po_date: formData.po_date,
+        expected_delivery_date: formData.expected_delivery_date || null,
+        supplier_id: formData.supplier_id || null,
+        supplier_name: formData.supplier_name,
+        supplier_phone: formData.supplier_phone || null,
+        supplier_email: formData.supplier_email || null,
+        subtotal, discount_percentage: parseFloat(formData.discount_percentage) || 0,
+        discount_amount: discountAmount, tax_percentage: parseFloat(formData.tax_percentage) || 0,
+        tax_amount: taxAmount, grand_total: grandTotal,
+        payment_terms: formData.payment_terms || null,
+        notes: formData.notes || null, status: formData.status,
+      }
+
+      let orderId = id
+      if (isEditing) {
+        const { error } = await supabase.from('purchase_orders').update(orderData).eq('id', id)
+        if (error) throw error
+        await supabase.from('purchase_order_items').delete().eq('po_id', id)
+      } else {
+        const { data, error } = await supabase.from('purchase_orders').insert(orderData).select().single()
+        if (error) throw error
+        orderId = data.id
+      }
+
+      const itemsData = validItems.map((item) => ({
+        po_id: orderId, product_id: item.product_id || null, product_name: item.product_name,
+        quantity: item.quantity, unit: item.unit, unit_price: item.unit_price, total_price: item.total_price,
+      }))
+
+      const { error: itemsError } = await supabase.from('purchase_order_items').insert(itemsData)
+      if (itemsError) throw itemsError
+
+      navigate(`/purchase-orders/${orderId}`)
+    } catch (error) {
+      console.error('Error saving order:', error)
+      alert('Failed to save purchase order')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-6">
+        <Link to="/purchase-orders" className="text-teal-600 hover:underline text-sm mb-2 inline-block">&larr; Back to list</Link>
+        <h1 className="text-xl lg:text-2xl font-bold text-white">{isEditing ? 'Edit Purchase Order' : 'New Purchase Order'}</h1>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
+          <h2 className="text-lg font-medium text-white mb-4">Order Details</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Date *</label>
+              <input type="date" required value={formData.po_date} onChange={(e) => setFormData({ ...formData, po_date: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Expected Delivery</label>
+              <input type="date" value={formData.expected_delivery_date} onChange={(e) => setFormData({ ...formData, expected_delivery_date: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Status</label>
+              <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="received">Received</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Supplier *</label>
+              <select required value={formData.supplier_id} onChange={(e) => handleSupplierChange(e.target.value)} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
+                <option value="">Select Supplier</option>
+                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium text-white">Items</h2>
+            <button type="button" onClick={addItem} className="flex items-center gap-1 text-sm text-teal-400 hover:text-teal-300"><Plus className="w-4 h-4" /> Add Item</button>
+          </div>
+
+          <div className="space-y-3">
+            {items.map((item, index) => (
+              <div key={index} className="grid grid-cols-12 gap-2 items-end bg-zinc-800/30 rounded-lg p-3">
+                <div className="col-span-12 md:col-span-4">
+                  <label className="block text-xs text-zinc-400 mb-1">Product</label>
+                  <select value={item.product_id} onChange={(e) => handleProductChange(index, e.target.value)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                    <option value="">Select product</option>
+                    {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-3 md:col-span-2">
+                  <label className="block text-xs text-zinc-400 mb-1">Qty</label>
+                  <input type="number" min="1" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                </div>
+                <div className="col-span-3 md:col-span-2">
+                  <label className="block text-xs text-zinc-400 mb-1">Unit Price</label>
+                  <input type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => handleItemChange(index, 'unit_price', e.target.value)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                </div>
+                <div className="col-span-5 md:col-span-3">
+                  <label className="block text-xs text-zinc-400 mb-1">Total</label>
+                  <p className="text-sm font-medium text-white py-2 px-3">QAR {item.total_price.toFixed(2)}</p>
+                </div>
+                <div className="col-span-1">
+                  <button type="button" onClick={() => removeItem(index)} disabled={items.length <= 1} className="p-2 text-red-400 hover:text-red-300 disabled:opacity-30"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex justify-end">
+            <div className="w-72 space-y-2">
+              <div className="flex justify-between text-sm"><span className="text-zinc-400">Subtotal:</span><span className="text-zinc-200">QAR {subtotal.toFixed(2)}</span></div>
+              <div className="flex items-center justify-between text-sm gap-2">
+                <span className="text-zinc-400">Discount:</span>
+                <div className="flex items-center gap-1">
+                  <input type="number" min="0" max="100" step="0.1" value={formData.discount_percentage} onChange={(e) => setFormData({ ...formData, discount_percentage: e.target.value })} className="w-16 bg-zinc-700/50 border border-zinc-600 rounded text-white text-sm text-right px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                  <span className="text-zinc-500 text-xs">%</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-sm gap-2">
+                <span className="text-zinc-400">VAT:</span>
+                <div className="flex items-center gap-1">
+                  <input type="number" min="0" max="100" step="0.1" value={formData.tax_percentage} onChange={(e) => setFormData({ ...formData, tax_percentage: e.target.value })} className="w-16 bg-zinc-700/50 border border-zinc-600 rounded text-white text-sm text-right px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                  <span className="text-zinc-500 text-xs">%</span>
+                </div>
+              </div>
+              <div className="flex justify-between text-lg font-bold border-t border-zinc-700 pt-2">
+                <span className="text-zinc-200">Total:</span>
+                <span className="text-teal-400">QAR {grandTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Payment Terms</label>
+              <input type="text" value={formData.payment_terms} onChange={(e) => setFormData({ ...formData, payment_terms: e.target.value })} placeholder="e.g. Net 30" className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Notes</label>
+              <input type="text" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-end gap-3">
+          <Link to="/purchase-orders" className="w-full sm:w-auto text-center px-6 py-2 border border-zinc-700 rounded-xl text-zinc-300 hover:bg-zinc-800">Cancel</Link>
+          <button type="submit" disabled={saving} className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-500 hover:to-teal-400 disabled:opacity-50">
+            {saving ? 'Saving...' : isEditing ? 'Update Order' : 'Create Order'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
