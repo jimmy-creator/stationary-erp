@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
+import { Sun, Moon } from 'lucide-react'
 
 export function Login() {
+  const { isDark, toggleTheme } = useTheme()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -27,6 +30,13 @@ export function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 relative overflow-hidden">
+      {/* Theme toggle */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors z-10"
+      >
+        {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      </button>
       {/* Background gradient orbs */}
       <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-teal-600/15 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-cyan-600/15 rounded-full blur-[120px]" />

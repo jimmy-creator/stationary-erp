@@ -7,6 +7,157 @@ body {
   background: #09090b;
 }
 
+/* ═══ Light Theme Overrides ═══ */
+html.light body {
+  background: #f5f5f5;
+}
+
+/* Main background */
+html.light .bg-zinc-950 { background-color: #f5f5f5 !important; }
+html.light .bg-zinc-900 { background-color: #ffffff !important; }
+html.light .bg-zinc-900\/50 { background-color: #ffffff !important; }
+html.light .bg-zinc-800\/50 { background-color: #f9fafb !important; }
+html.light .bg-zinc-800\/30 { background-color: #f3f4f6 !important; }
+html.light .bg-zinc-800\/20 { background-color: #f9fafb !important; }
+html.light .bg-zinc-800 { background-color: #f3f4f6 !important; }
+html.light .bg-zinc-700\/50 { background-color: #f3f4f6 !important; }
+
+/* Backdrop */
+html.light .bg-zinc-950\/80 { background-color: rgba(255, 255, 255, 0.9) !important; }
+html.light .backdrop-blur-xl { backdrop-filter: blur(16px); }
+
+/* Borders */
+html.light .border-zinc-800 { border-color: #e5e7eb !important; }
+html.light .border-zinc-800\/50 { border-color: #e5e7eb !important; }
+html.light .border-zinc-700 { border-color: #d1d5db !important; }
+html.light .border-zinc-600 { border-color: #d1d5db !important; }
+
+/* Text colors */
+html.light .text-white { color: #111827 !important; }
+html.light .text-zinc-200 { color: #1f2937 !important; }
+html.light .text-zinc-300 { color: #374151 !important; }
+html.light .text-zinc-400 { color: #6b7280 !important; }
+html.light .text-zinc-500 { color: #9ca3af !important; }
+html.light .text-zinc-600 { color: #9ca3af !important; }
+html.light .placeholder-zinc-500::placeholder { color: #9ca3af !important; }
+
+/* Form inputs */
+html.light input, html.light select, html.light textarea {
+  color: #111827 !important;
+}
+html.light input::placeholder, html.light textarea::placeholder {
+  color: #9ca3af !important;
+}
+html.light option {
+  background: #ffffff;
+  color: #111827;
+}
+
+/* Sidebar */
+html.light aside { background-color: #ffffff !important; border-color: #e5e7eb !important; }
+html.light .hover\:bg-zinc-800\/50:hover { background-color: #f3f4f6 !important; }
+
+/* Dividers */
+html.light .divide-slate-800 > :not(:last-child) { border-color: #e5e7eb !important; }
+html.light .divide-zinc-800 > :not(:last-child) { border-color: #e5e7eb !important; }
+
+/* Table hover */
+html.light tr.hover\:bg-zinc-800\/50:hover { background-color: #f9fafb !important; }
+
+/* Cards hover */
+html.light .hover\:bg-zinc-800\/50:hover { background-color: #f9fafb !important; }
+
+/* Modal overlay */
+html.light .bg-black\/50 { background-color: rgba(0, 0, 0, 0.3) !important; }
+html.light .bg-black\/60 { background-color: rgba(0, 0, 0, 0.3) !important; }
+
+/* Colored backgrounds in light mode - keep them but lighter */
+html.light .bg-teal-500\/5 { background-color: rgba(20, 184, 166, 0.05) !important; }
+html.light .bg-teal-500\/10 { background-color: rgba(20, 184, 166, 0.08) !important; }
+html.light .bg-teal-500\/20 { background-color: rgba(20, 184, 166, 0.1) !important; }
+html.light .bg-teal-600\/20 { background-color: rgba(13, 148, 136, 0.08) !important; }
+
+html.light .bg-green-900\/50 { background-color: rgba(22, 163, 74, 0.1) !important; }
+html.light .bg-green-900\/10 { background-color: rgba(22, 163, 74, 0.05) !important; }
+html.light .bg-green-900\/20 { background-color: rgba(22, 163, 74, 0.08) !important; }
+html.light .bg-green-500\/5 { background-color: rgba(22, 163, 74, 0.05) !important; }
+html.light .bg-green-500\/20 { background-color: rgba(22, 163, 74, 0.1) !important; }
+
+html.light .bg-red-900\/50 { background-color: rgba(220, 38, 38, 0.1) !important; }
+html.light .bg-red-900\/10 { background-color: rgba(220, 38, 38, 0.05) !important; }
+html.light .bg-red-900\/20 { background-color: rgba(220, 38, 38, 0.08) !important; }
+html.light .bg-red-500\/5 { background-color: rgba(220, 38, 38, 0.05) !important; }
+html.light .bg-red-500\/10 { background-color: rgba(220, 38, 38, 0.06) !important; }
+html.light .bg-red-500\/20 { background-color: rgba(220, 38, 38, 0.1) !important; }
+
+html.light .bg-orange-900\/50 { background-color: rgba(234, 88, 12, 0.1) !important; }
+html.light .bg-orange-900\/20 { background-color: rgba(234, 88, 12, 0.08) !important; }
+html.light .bg-orange-500\/5 { background-color: rgba(234, 88, 12, 0.05) !important; }
+html.light .bg-orange-500\/20 { background-color: rgba(234, 88, 12, 0.1) !important; }
+
+html.light .bg-yellow-900\/50 { background-color: rgba(202, 138, 4, 0.1) !important; }
+html.light .bg-yellow-500\/20 { background-color: rgba(202, 138, 4, 0.1) !important; }
+
+html.light .bg-blue-900\/50 { background-color: rgba(37, 99, 235, 0.1) !important; }
+html.light .bg-blue-900\/30 { background-color: rgba(37, 99, 235, 0.06) !important; }
+html.light .bg-blue-500\/5 { background-color: rgba(37, 99, 235, 0.05) !important; }
+html.light .bg-blue-500\/20 { background-color: rgba(37, 99, 235, 0.1) !important; }
+
+html.light .bg-purple-900\/50 { background-color: rgba(147, 51, 234, 0.1) !important; }
+html.light .bg-purple-500\/5 { background-color: rgba(147, 51, 234, 0.05) !important; }
+html.light .bg-purple-500\/20 { background-color: rgba(147, 51, 234, 0.1) !important; }
+
+html.light .bg-indigo-900\/50 { background-color: rgba(99, 102, 241, 0.1) !important; }
+html.light .bg-indigo-500\/5 { background-color: rgba(99, 102, 241, 0.05) !important; }
+html.light .bg-indigo-500\/20 { background-color: rgba(99, 102, 241, 0.1) !important; }
+
+html.light .bg-violet-500\/5 { background-color: rgba(139, 92, 246, 0.05) !important; }
+html.light .bg-cyan-900\/30 { background-color: rgba(6, 182, 212, 0.06) !important; }
+html.light .bg-cyan-500\/5 { background-color: rgba(6, 182, 212, 0.05) !important; }
+html.light .bg-amber-500\/5 { background-color: rgba(245, 158, 11, 0.05) !important; }
+html.light .bg-rose-500\/5 { background-color: rgba(244, 63, 94, 0.05) !important; }
+html.light .bg-emerald-500\/5 { background-color: rgba(16, 185, 129, 0.05) !important; }
+html.light .bg-emerald-500\/10 { background-color: rgba(16, 185, 129, 0.08) !important; }
+html.light .bg-emerald-500\/20 { background-color: rgba(16, 185, 129, 0.1) !important; }
+html.light .bg-sky-500\/5 { background-color: rgba(14, 165, 233, 0.05) !important; }
+html.light .bg-pink-500\/5 { background-color: rgba(236, 72, 153, 0.05) !important; }
+
+/* Border colors for color variants */
+html.light .border-teal-500\/10 { border-color: rgba(20, 184, 166, 0.15) !important; }
+html.light .border-teal-500\/20 { border-color: rgba(20, 184, 166, 0.2) !important; }
+html.light .border-teal-500\/30 { border-color: rgba(20, 184, 166, 0.25) !important; }
+html.light .border-green-500\/30 { border-color: rgba(22, 163, 74, 0.25) !important; }
+html.light .border-red-500\/20 { border-color: rgba(220, 38, 38, 0.2) !important; }
+html.light .border-red-500\/30 { border-color: rgba(220, 38, 38, 0.25) !important; }
+html.light .border-orange-500\/30 { border-color: rgba(234, 88, 12, 0.25) !important; }
+html.light .border-blue-500\/30 { border-color: rgba(37, 99, 235, 0.25) !important; }
+html.light .border-blue-800\/50 { border-color: rgba(37, 99, 235, 0.15) !important; }
+html.light .border-cyan-800\/50 { border-color: rgba(6, 182, 212, 0.15) !important; }
+html.light .border-purple-500\/30 { border-color: rgba(147, 51, 234, 0.25) !important; }
+html.light .border-emerald-500\/20 { border-color: rgba(16, 185, 129, 0.2) !important; }
+
+/* Scrollbar - light */
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Shadow for cards in light mode */
+html.light .rounded-xl,
+html.light .rounded-2xl {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Login page */
+html.light .bg-zinc-900\/80 { background-color: rgba(255, 255, 255, 0.9) !important; }
+html.light .border-zinc-700\/50 { border-color: #d1d5db !important; }
+
+/* Active nav in light mode */
+html.light .from-teal-600\/20 { --tw-gradient-from: rgba(13, 148, 136, 0.08) !important; }
+html.light .to-cyan-600\/20 { --tw-gradient-to: rgba(6, 182, 212, 0.08) !important; }
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

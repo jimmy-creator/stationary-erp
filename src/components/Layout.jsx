@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import {
   LayoutDashboard,
+  Sun,
+  Moon,
   Package,
   FolderOpen,
   Truck,
@@ -24,6 +27,7 @@ import {
 
 export function Layout() {
   const { user, userRole, signOut, isAdmin, canView } = useAuth()
+  const { isDark, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -207,6 +211,13 @@ export function Layout() {
             </button>
             <div className="hidden lg:block" />
             <div className="flex items-center gap-3">
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800/50 transition-colors"
+                title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
               <span className="text-xs text-zinc-500 hidden sm:inline">{user?.email}</span>
               <span
                 className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
