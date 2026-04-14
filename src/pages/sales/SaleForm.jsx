@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -31,7 +31,10 @@ export function SaleForm() {
   const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0 }])
 
   useEffect(() => {
-    fetchData()
+    fetchData().then(() => {
+      // Auto-focus first product select on new sale
+      if (!isEditing) focusLastProductSelect()
+    })
     if (isEditing) fetchSale()
   }, [id])
 
@@ -117,13 +120,79 @@ export function SaleForm() {
     setItems(newItems)
   }
 
-  const addItem = () => {
-    setItems([...items, { product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0 }])
+  const focusLastProductSelect = () => {
+    setTimeout(() => {
+      const selects = document.querySelectorAll('[data-product-select]')
+      const last = selects[selects.length - 1]
+      if (last) {
+        last.focus()
+        // Open the dropdown by simulating a mousedown or using size trick
+        last.size = last.options.length > 10 ? 10 : last.options.length
+        last.addEventListener('change', function handler() {
+          last.size = 0
+          last.removeEventListener('change', handler)
+        }, { once: true })
+        last.addEventListener('blur', function handler() {
+          last.size = 0
+          last.removeEventListener('blur', handler)
+        }, { once: true })
+      }
+    }, 50)
   }
+
+  const addItem = useCallback(() => {
+    setItems((prev) => [...prev, { product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0 }])
+    focusLastProductSelect()
+  }, [])
 
   const removeItem = (index) => {
     if (items.length <= 1) return
     setItems(items.filter((_, i) => i !== index))
+  }
+
+  // Keyboard shortcut: Ctrl/Cmd + I to add item
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+        e.preventDefault()
+        addItem()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [addItem])
+
+  // Enter on product select → focus qty
+  const handleProductKeyDown = (e, index) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const qtyInputs = document.querySelectorAll('[data-qty-input]')
+      if (qtyInputs[index]) qtyInputs[index].focus()
+    }
+  }
+
+  // Enter on qty → focus price
+  const handleQtyKeyDown = (e, index) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const priceInputs = document.querySelectorAll('[data-price-input]')
+      if (priceInputs[index]) priceInputs[index].focus()
+    }
+  }
+
+  // Enter or Tab on last price field → add new item
+  const handlePriceKeyDown = (e, index) => {
+    if ((e.key === 'Tab' && !e.shiftKey && index === items.length - 1) || e.key === 'Enter') {
+      if (index === items.length - 1) {
+        e.preventDefault()
+        addItem()
+      } else if (e.key === 'Enter') {
+        // Enter on non-last price → focus next product select
+        e.preventDefault()
+        const selects = document.querySelectorAll('[data-product-select]')
+        if (selects[index + 1]) selects[index + 1].focus()
+      }
+    }
   }
 
   const subtotal = items.reduce((sum, item) => sum + item.total_price, 0)
@@ -269,8 +338,8 @@ export function SaleForm() {
         <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-medium text-white">Items</h2>
-            <button type="button" onClick={addItem} className="flex items-center gap-1 text-sm text-teal-400 hover:text-teal-300">
-              <Plus className="w-4 h-4" /> Add Item
+            <button type="button" onClick={addItem} className="flex items-center gap-1 text-sm text-teal-400 hover:text-teal-300" title="Add Item (Ctrl+I)">
+              <Plus className="w-4 h-4" /> Add Item <span className="text-xs text-zinc-600 ml-1 hidden sm:inline">(Ctrl+I)</span>
             </button>
           </div>
 
@@ -279,18 +348,18 @@ export function SaleForm() {
               <div key={index} className="grid grid-cols-12 gap-2 items-end bg-zinc-800/30 rounded-lg p-3">
                 <div className="col-span-12 md:col-span-5">
                   <label className="block text-xs text-zinc-400 mb-1">Product</label>
-                  <select value={item.product_id} onChange={(e) => handleProductChange(index, e.target.value)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
+                  <select data-product-select value={item.product_id} onChange={(e) => handleProductChange(index, e.target.value)} onKeyDown={(e) => handleProductKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
                     <option value="">Select product</option>
                     {products.map((p) => <option key={p.id} value={p.id} disabled={p.stock_quantity <= 0}>{p.name} ({p.stock_quantity} {p.unit}){p.stock_quantity <= 0 ? ' - OUT OF STOCK' : ''}</option>)}
                   </select>
                 </div>
                 <div className="col-span-4 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Qty</label>
-                  <input type="number" min="1" value={item.quantity} onChange={(e) => handleQuantityChange(index, e.target.value)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  <input data-qty-input type="number" min="1" value={item.quantity} onChange={(e) => handleQuantityChange(index, e.target.value)} onKeyDown={(e) => handleQtyKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div className="col-span-4 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Price</label>
-                  <input type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => handleUnitPriceChange(index, e.target.value)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  <input data-price-input type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => handleUnitPriceChange(index, e.target.value)} onKeyDown={(e) => handlePriceKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div className="col-span-3 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Total</label>
