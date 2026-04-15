@@ -3,29 +3,81 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useStoreSettings } from '../../hooks/useStoreSettings'
 
+// ─── Number to words (for invoice footer) ────────────────────────────────────
+function numberToWords(amount) {
+  const ones = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+    'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+    'Seventeen', 'Eighteen', 'Nineteen',
+  ]
+  const tensArr = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+
+  function convert(n) {
+    if (n === 0) return ''
+    if (n < 20) return ones[n]
+    if (n < 100) return tensArr[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '')
+    return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + convert(n % 100) : '')
+  }
+
+  const intPart = Math.floor(Math.abs(amount))
+  const fils = Math.round((Math.abs(amount) - intPart) * 100)
+
+  if (intPart === 0 && fils === 0) return 'Zero only'
+
+  let result = ''
+  let rem = intPart
+  if (rem >= 1000000) { result += convert(Math.floor(rem / 1000000)) + ' Million '; rem = rem % 1000000 }
+  if (rem >= 1000) { result += convert(Math.floor(rem / 1000)) + ' Thousand '; rem = rem % 1000 }
+  if (rem > 0) result += convert(rem)
+
+  if (fils > 0) result += ' and ' + convert(fils) + ' Fils'
+  return result.trim() + ' only'
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const fmt = (n) =>
+  `QR ${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+
+const fmtDate = (d) =>
+  d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '-'
+
+// ─── Inline styles ────────────────────────────────────────────────────────────
+const GREEN = '#7ab800'
+const DARK = '#111'
+const GRAY = '#555'
+
 export function SaleView() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { settings: store } = useStoreSettings()
   const [sale, setSale] = useState(null)
   const [items, setItems] = useState([])
+  const [customer, setCustomer] = useState(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
-  useEffect(() => {
-    fetchSale()
-  }, [id])
+  useEffect(() => { fetchSale() }, [id])
 
   const fetchSale = async () => {
     try {
       const [saleRes, itemsRes] = await Promise.all([
         supabase.from('sales').select('*').eq('id', id).single(),
-        supabase.from('sale_items').select('*').eq('sale_id', id),
+        supabase.from('sale_items').select('*, products(unit, barcode, sku)').eq('sale_id', id),
       ])
       if (saleRes.error) throw saleRes.error
       setSale(saleRes.data)
       setItems(itemsRes.data || [])
+
+      // Fetch customer address if customer_id exists
+      if (saleRes.data.customer_id) {
+        const { data: cust } = await supabase
+          .from('customers')
+          .select('address, phone')
+          .eq('id', saleRes.data.customer_id)
+          .single()
+        setCustomer(cust)
+      }
     } catch (error) {
       console.error('Error fetching sale:', error)
     } finally {
@@ -48,33 +100,31 @@ export function SaleView() {
     }
   }
 
-  const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'
-  const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-
   const statusLabels = {
-    completed: { label: 'Completed', class: 'bg-green-900/50 text-green-400' },
-    returned: { label: 'Returned', class: 'bg-orange-900/50 text-orange-400' },
-    cancelled: { label: 'Cancelled', class: 'bg-red-900/50 text-red-400' },
+    completed: { label: 'Completed', cls: 'bg-green-900/50 text-green-400' },
+    returned:  { label: 'Returned',  cls: 'bg-orange-900/50 text-orange-400' },
+    cancelled: { label: 'Cancelled', cls: 'bg-red-900/50 text-red-400' },
   }
-
   const paymentStatusLabels = {
-    paid: { label: 'Paid', class: 'bg-green-900/50 text-green-400' },
-    partial: { label: 'Partial', class: 'bg-yellow-900/50 text-yellow-400' },
-    unpaid: { label: 'Unpaid', class: 'bg-red-900/50 text-red-400' },
+    paid:    { label: 'Paid',    cls: 'bg-green-900/50 text-green-400' },
+    partial: { label: 'Partial', cls: 'bg-yellow-900/50 text-yellow-400' },
+    unpaid:  { label: 'Unpaid',  cls: 'bg-red-900/50 text-red-400' },
   }
-
   const paymentLabels = { cash: 'Cash', card: 'Card', bank_transfer: 'Bank Transfer', credit: 'Credit' }
 
   if (loading) {
-    return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
+    return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600" /></div>
   }
-
   if (!sale) {
     return <div className="text-center py-8"><p className="text-zinc-500">Sale not found.</p><Link to="/sales" className="text-teal-600 hover:underline">Back to list</Link></div>
   }
 
+  const balanceDue = (sale.grand_total || 0) - (sale.amount_paid || 0)
+
   return (
     <div className="max-w-4xl mx-auto print-area">
+
+      {/* ── Delete modal ── */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg max-w-md w-full p-6">
@@ -88,6 +138,7 @@ export function SaleView() {
         </div>
       )}
 
+      {/* ── Screen action bar ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6 print-hide">
         <div>
           <Link to="/sales" className="text-teal-600 hover:underline text-sm mb-2 inline-block">&larr; Back to list</Link>
@@ -100,115 +151,196 @@ export function SaleView() {
         </div>
       </div>
 
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl">
-        {/* Header */}
-        <div className="p-4 lg:p-6 border-b border-zinc-800">
-          <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-white">{store.store_name || 'INVOICE'}</h1>
-              {store.address && <p className="text-sm text-zinc-400 whitespace-pre-wrap">{store.address}</p>}
-              {(store.phone || store.email) && (
-                <p className="text-sm text-zinc-500">
-                  {store.phone && `Tel: ${store.phone}`}{store.phone && store.email && ' | '}{store.email && store.email}
-                </p>
-              )}
-              <p className="text-lg font-semibold text-teal-400 mt-2">{sale.invoice_number}</p>
-            </div>
-            <div className="sm:text-right">
-              <p className="text-sm text-zinc-500">Date: {formatDate(sale.sale_date)}</p>
-              <div className="flex gap-2 mt-2">
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusLabels[sale.status]?.class}`}>
-                  {statusLabels[sale.status]?.label}
-                </span>
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${paymentStatusLabels[sale.payment_status]?.class}`}>
-                  {paymentStatusLabels[sale.payment_status]?.label}
-                </span>
-              </div>
-            </div>
+      {/* ── Screen summary card ── */}
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl print-hide">
+
+        <div className="p-4 lg:p-6 border-b border-zinc-800 flex flex-col sm:flex-row justify-between gap-4">
+          <div>
+            <p className="text-lg font-semibold text-teal-400">{sale.invoice_number}</p>
+            <p className="text-sm text-zinc-400">{fmtDate(sale.sale_date)}</p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusLabels[sale.status]?.cls}`}>{statusLabels[sale.status]?.label}</span>
+            <span className={`px-2 py-1 text-xs font-medium rounded-full ${paymentStatusLabels[sale.payment_status]?.cls}`}>{paymentStatusLabels[sale.payment_status]?.label}</span>
           </div>
         </div>
-
-        {/* Customer */}
         <div className="p-4 lg:p-6 border-b border-zinc-800">
-          <h3 className="text-sm font-medium text-zinc-500 uppercase mb-2">Customer</h3>
+          <p className="text-sm text-zinc-500 mb-1">Customer</p>
           <p className="text-zinc-200 font-medium">{sale.customer_name || 'Walk-in Customer'}</p>
-          <p className="text-sm text-zinc-400">Payment: {paymentLabels[sale.payment_method]}</p>
+          <p className="text-sm text-zinc-400 mt-1">Payment: {paymentLabels[sale.payment_method]}</p>
           {sale.created_by_email && <p className="text-sm text-zinc-400">Sold by: {sale.created_by_email}</p>}
         </div>
-
-        {/* Items */}
-        <div className="p-4 lg:p-6 border-b border-zinc-800">
-          <h3 className="text-sm font-medium text-zinc-500 uppercase mb-4">Items</h3>
-
-          <div className="hidden md:block overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-800">
-              <thead className="bg-zinc-800/50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">#</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-zinc-500 uppercase">Product</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-zinc-500 uppercase">Qty</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Price</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Total</th>
+        <div className="p-4 lg:p-6 border-b border-zinc-800 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800">
+                <th className="pb-2 text-left text-xs text-zinc-500 uppercase">#</th>
+                <th className="pb-2 text-left text-xs text-zinc-500 uppercase">Product</th>
+                <th className="pb-2 text-center text-xs text-zinc-500 uppercase">Qty</th>
+                <th className="pb-2 text-right text-xs text-zinc-500 uppercase">Unit Price</th>
+                <th className="pb-2 text-right text-xs text-zinc-500 uppercase">Amount</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800">
+              {items.map((item, i) => (
+                <tr key={item.id}>
+                  <td className="py-2 text-zinc-500">{i + 1}</td>
+                  <td className="py-2 text-zinc-200">{item.product_name}</td>
+                  <td className="py-2 text-center text-zinc-400">{item.quantity}</td>
+                  <td className="py-2 text-right text-zinc-400">{fmt(item.unit_price)}</td>
+                  <td className="py-2 text-right font-medium text-zinc-200">{fmt(item.total_price)}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {items.map((item, i) => (
-                  <tr key={item.id}>
-                    <td className="px-4 py-3 text-sm text-zinc-500">{i + 1}</td>
-                    <td className="px-4 py-3 text-sm text-zinc-200">{item.product_name}</td>
-                    <td className="px-4 py-3 text-sm text-zinc-400 text-center">{item.quantity}</td>
-                    <td className="px-4 py-3 text-sm text-zinc-400 text-right">{formatCurrency(item.unit_price)}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-zinc-200 text-right">{formatCurrency(item.total_price)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile items */}
-          <div className="md:hidden space-y-3">
-            {items.map((item, i) => (
-              <div key={item.id} className="bg-zinc-800/30 rounded-lg p-3">
-                <div className="flex justify-between"><span className="text-sm text-zinc-200">{item.product_name}</span><span className="font-medium text-zinc-200">{formatCurrency(item.total_price)}</span></div>
-                <p className="text-xs text-zinc-500">{item.quantity} x {formatCurrency(item.unit_price)}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Totals */}
-          <div className="mt-4 flex justify-end">
-            <div className="w-72 space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-zinc-400">Subtotal:</span><span className="text-zinc-200">{formatCurrency(sale.subtotal)}</span></div>
-              {sale.discount_amount > 0 && (
-                <div className="flex justify-between text-sm"><span className="text-zinc-400">Discount ({sale.discount_percentage}%):</span><span className="text-red-400">-{formatCurrency(sale.discount_amount)}</span></div>
-              )}
-              {sale.tax_amount > 0 && (
-                <div className="flex justify-between text-sm"><span className="text-zinc-400">VAT ({sale.tax_percentage}%):</span><span className="text-zinc-200">{formatCurrency(sale.tax_amount)}</span></div>
-              )}
-              <div className="flex justify-between text-lg font-bold border-t border-zinc-800 pt-2">
-                <span className="text-zinc-200">Grand Total:</span>
-                <span className="text-teal-400">{formatCurrency(sale.grand_total)}</span>
-              </div>
-              {sale.payment_status !== 'paid' && (
-                <div className="flex justify-between text-sm border-t border-zinc-800 pt-2">
-                  <span className="text-zinc-400">Amount Paid:</span>
-                  <span className="text-zinc-200">{formatCurrency(sale.amount_paid)}</span>
-                </div>
-              )}
-              {sale.payment_status !== 'paid' && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-zinc-400">Balance Due:</span>
-                  <span className="text-red-400 font-bold">{formatCurrency(sale.grand_total - sale.amount_paid)}</span>
-                </div>
-              )}
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="p-4 lg:p-6">
+          <div className="flex justify-end">
+            <div className="w-64 space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-zinc-400">Subtotal</span><span className="text-zinc-200">{fmt(sale.subtotal)}</span></div>
+              {sale.discount_amount > 0 && <div className="flex justify-between"><span className="text-zinc-400">Discount</span><span className="text-red-400">-{fmt(sale.discount_amount)}</span></div>}
+              <div className="flex justify-between text-base font-bold border-t border-zinc-800 pt-2"><span className="text-zinc-200">Grand Total</span><span className="text-teal-400">{fmt(sale.grand_total)}</span></div>
+              {sale.payment_status !== 'paid' && <>
+                <div className="flex justify-between"><span className="text-zinc-400">Paid</span><span className="text-zinc-200">{fmt(sale.amount_paid)}</span></div>
+                <div className="flex justify-between font-bold"><span className="text-zinc-400">Balance Due</span><span className="text-red-400">{fmt(balanceDue)}</span></div>
+              </>}
             </div>
+          </div>
+          {sale.notes && <p className="mt-4 text-sm text-zinc-400"><span className="text-zinc-500">Notes: </span>{sale.notes}</p>}
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          PRINT-ONLY INVOICE — matches the photo layout
+      ══════════════════════════════════════════════════════════════════ */}
+      <div className="print-only" style={{ fontFamily: 'Arial, sans-serif', color: DARK, background: '#fff', padding: '24px 32px', fontSize: '13px' }}>
+
+        {/* ── Store Header ── */}
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '0.5px', marginBottom: '4px' }}>
+            {store.store_name || 'BINTHAWAR ERP'}
+          </div>
+          {store.address && (
+            <div style={{ color: GRAY, lineHeight: '1.6', whiteSpace: 'pre-wrap', fontSize: '12px' }}>
+              {store.address}
+            </div>
+          )}
+          <div style={{ color: GRAY, fontSize: '12px', lineHeight: '1.6' }}>
+            {store.phone && <span>Phone no. : {store.phone}{'  '}</span>}
+            {store.email && <span>Email : {store.email}</span>}
+          </div>
+        </div>
+        <hr style={{ border: 'none', borderTop: '1.5px solid #333', marginBottom: '12px' }} />
+
+        {/* ── Invoice Title ── */}
+        <div style={{ textAlign: 'center', fontSize: '16px', fontWeight: '700', color: GREEN, marginBottom: '14px', letterSpacing: '1px' }}>
+          CASH/CREDIT INVOICE
+        </div>
+
+        {/* ── Bill To / Invoice Details ── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <div>
+            <div style={{ fontSize: '11px', color: GRAY, marginBottom: '3px' }}>Bill To</div>
+            <div style={{ fontSize: '15px', fontWeight: '700' }}>{sale.customer_name || 'Walk-in Customer'}</div>
+            {customer?.address && <div style={{ fontSize: '12px', color: GRAY, marginTop: '2px', whiteSpace: 'pre-wrap' }}>{customer.address}</div>}
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '11px', color: GRAY, marginBottom: '4px', fontWeight: '600' }}>Invoice Details</div>
+            <div style={{ fontSize: '12px' }}>Invoice No. : <strong>{sale.invoice_number}</strong></div>
+            <div style={{ fontSize: '12px' }}>Date : {fmtDate(sale.sale_date)}</div>
+            <div style={{ fontSize: '12px' }}>Payment : {paymentLabels[sale.payment_method]}</div>
           </div>
         </div>
 
+        {/* ── Items Table ── */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '0' }}>
+          <thead>
+            <tr style={{ backgroundColor: GREEN, color: '#fff' }}>
+              <th style={{ padding: '7px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '12px', width: '30px' }}>#</th>
+              <th style={{ padding: '7px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '12px' }}>Item Name</th>
+              <th style={{ padding: '7px 8px', textAlign: 'center',fontWeight: '700', fontSize: '12px', width: '60px' }}>Quantity</th>
+              <th style={{ padding: '7px 8px', textAlign: 'center',fontWeight: '700', fontSize: '12px', width: '50px' }}>Unit</th>
+              <th style={{ padding: '7px 8px', textAlign: 'right', fontWeight: '700', fontSize: '12px', width: '100px' }}>Price / Unit</th>
+              <th style={{ padding: '7px 8px', textAlign: 'right', fontWeight: '700', fontSize: '12px', width: '100px' }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, i) => {
+              const even = i % 2 === 0
+              const barcode = item.products?.barcode || item.products?.sku || ''
+              const unit = item.products?.unit || ''
+              return (
+                <tr key={item.id} style={{ backgroundColor: even ? '#f9f9f9' : '#fff', borderBottom: '1px solid #e0e0e0' }}>
+                  <td style={{ padding: '7px 8px', textAlign: 'left', verticalAlign: 'top', fontWeight: '600', color: '#333' }}>{i + 1}</td>
+                  <td style={{ padding: '7px 8px', verticalAlign: 'top' }}>
+                    <div style={{ fontWeight: '700', fontSize: '13px' }}>{item.product_name}</div>
+                    {barcode && <div style={{ fontSize: '11px', color: GRAY, marginTop: '1px' }}>{barcode}</div>}
+                  </td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', verticalAlign: 'top' }}>{item.quantity}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'center', verticalAlign: 'top', color: GRAY }}>{unit}</td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', verticalAlign: 'top' }}>
+                    QR {parseFloat(item.unit_price || 0).toFixed(4)}
+                  </td>
+                  <td style={{ padding: '7px 8px', textAlign: 'right', verticalAlign: 'top', fontWeight: '600' }}>
+                    QR {parseFloat(item.total_price || 0).toFixed(2)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+
+        {/* ── Footer: Amount in Words + Totals ── */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: '1.5px solid #ccc' }}>
+          <tbody>
+            <tr>
+              {/* Amount in words */}
+              <td style={{ padding: '10px 8px', verticalAlign: 'top', width: '55%' }}>
+                <span style={{ fontWeight: '700', fontSize: '12px' }}>Invoice Amount in Words: </span>
+                <span style={{ fontSize: '12px' }}>{numberToWords(sale.grand_total || 0)}</span>
+              </td>
+              {/* Totals */}
+              <td style={{ padding: '0', verticalAlign: 'top', width: '45%' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    {sale.discount_amount > 0 && (
+                      <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
+                        <td style={{ padding: '6px 8px', textAlign: 'left', color: GRAY }}>Discount</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'right', color: '#c00' }}>-QR {parseFloat(sale.discount_amount || 0).toFixed(2)}</td>
+                      </tr>
+                    )}
+                    <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'left', color: GRAY }}>Sub Total</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right' }}>QR {parseFloat(sale.subtotal || 0).toFixed(2)}</td>
+                    </tr>
+                    <tr style={{ borderBottom: '1px solid #999' }}>
+                      <td style={{ padding: '7px 8px', textAlign: 'left', fontWeight: '800', fontSize: '14px' }}>Total</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: '800', fontSize: '14px' }}>
+                        QR {parseFloat(sale.grand_total || 0).toFixed(2)}
+                      </td>
+                    </tr>
+                    {sale.payment_status !== 'paid' && (
+                      <>
+                        <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
+                          <td style={{ padding: '5px 8px', textAlign: 'left', color: GRAY }}>Amount Paid</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right' }}>QR {parseFloat(sale.amount_paid || 0).toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: '5px 8px', textAlign: 'left', fontWeight: '700', color: '#c00' }}>Balance Due</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: '700', color: '#c00' }}>QR {parseFloat(balanceDue).toFixed(2)}</td>
+                        </tr>
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
         {sale.notes && (
-          <div className="p-4 lg:p-6">
-            <h3 className="text-sm font-medium text-zinc-500 uppercase mb-2">Notes</h3>
-            <p className="text-sm text-zinc-300">{sale.notes}</p>
+          <div style={{ marginTop: '12px', fontSize: '12px', color: GRAY }}>
+            <strong>Notes:</strong> {sale.notes}
           </div>
         )}
       </div>

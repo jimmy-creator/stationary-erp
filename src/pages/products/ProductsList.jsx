@@ -253,13 +253,20 @@ export function ProductsList() {
                       </td>
                       <td className="px-6 py-4 text-sm text-zinc-400">{product.brand || '-'}</td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          isOut ? 'bg-red-900/50 text-red-400' :
-                          isLow ? 'bg-orange-900/50 text-orange-400' :
-                          'bg-green-900/50 text-green-400'
-                        }`}>
-                          {product.stock_quantity} {product.unit}
-                        </span>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            isOut ? 'bg-red-900/50 text-red-400' :
+                            isLow ? 'bg-orange-900/50 text-orange-400' :
+                            'bg-green-900/50 text-green-400'
+                          }`}>
+                            {product.stock_quantity} {product.unit}
+                          </span>
+                          {product.secondary_unit && product.unit_conversion && product.stock_quantity > 0 && (
+                            <span className="text-xs text-zinc-500">
+                              = {Math.round(product.stock_quantity * product.unit_conversion)} {product.secondary_unit}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-zinc-400 text-right">
                         {formatCurrency(product.cost_price)}

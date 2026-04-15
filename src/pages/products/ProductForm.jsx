@@ -52,6 +52,8 @@ export function ProductForm() {
     category_id: '',
     brand: '',
     unit: 'Pcs',
+    secondary_unit: '',
+    unit_conversion: '',
     cost_price: '',
     selling_price: '',
     stock_quantity: '0',
@@ -82,6 +84,8 @@ export function ProductForm() {
         category_id: data.category_id || '',
         brand: data.brand || '',
         unit: data.unit || 'Pcs',
+        secondary_unit: data.secondary_unit || '',
+        unit_conversion: data.unit_conversion?.toString() || '',
         cost_price: data.cost_price || '',
         selling_price: data.selling_price || '',
         stock_quantity: data.stock_quantity?.toString() || '0',
@@ -160,12 +164,35 @@ export function ProductForm() {
     setSaving(true)
 
     try {
+      // Check barcode uniqueness
+      if (formData.barcode) {
+        let barcodeQuery = supabase
+          .from('products')
+          .select('id, name')
+          .eq('barcode', formData.barcode)
+
+        if (isEditing) {
+          barcodeQuery = barcodeQuery.neq('id', id)
+        }
+
+        const { data: existing } = await barcodeQuery.maybeSingle()
+        if (existing) {
+          alert(`Barcode already used by "${existing.name}". Please use a different barcode.`)
+          setSaving(false)
+          return
+        }
+      }
+
       const productData = {
         name: formData.name,
         description: formData.description || null,
         category_id: formData.category_id || null,
         brand: formData.brand || null,
         unit: formData.unit,
+        secondary_unit: formData.secondary_unit || null,
+        unit_conversion: formData.secondary_unit && formData.unit_conversion
+          ? parseFloat(formData.unit_conversion) || null
+          : null,
         cost_price: parseFloat(formData.cost_price) || 0,
         selling_price: parseFloat(formData.selling_price) || 0,
         stock_quantity: parseInt(formData.stock_quantity) || 0,
@@ -321,7 +348,7 @@ export function ProductForm() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-1">Unit</label>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Base Unit</label>
               <select
                 value={formData.unit}
                 onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
@@ -333,11 +360,49 @@ export function ProductForm() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-1">Barcode</label>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Secondary Unit <span className="text-zinc-500 font-normal">(optional)</span></label>
+              <input
+                type="text"
+                value={formData.secondary_unit}
+                onChange={(e) => setFormData({ ...formData, secondary_unit: e.target.value })}
+                placeholder="e.g. Pieces, Pcs"
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+              />
+            </div>
+            {formData.secondary_unit && (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-zinc-300 mb-1">
+                  How many <span className="text-teal-400">{formData.secondary_unit}</span> per <span className="text-teal-400">{formData.unit}</span>?
+                </label>
+                <div className="flex items-center gap-3">
+                  <span className="text-zinc-400 text-sm shrink-0">1 {formData.unit} =</span>
+                  <input
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    value={formData.unit_conversion}
+                    onChange={(e) => setFormData({ ...formData, unit_conversion: e.target.value })}
+                    placeholder="e.g. 12"
+                    className="w-32 bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+                  />
+                  <span className="text-zinc-400 text-sm">{formData.secondary_unit}</span>
+                </div>
+                {formData.unit_conversion && parseFloat(formData.unit_conversion) > 0 && (
+                  <p className="text-xs text-teal-400/70 mt-1">
+                    Cost per {formData.secondary_unit}: {formData.cost_price
+                      ? `QAR ${(parseFloat(formData.cost_price) / parseFloat(formData.unit_conversion)).toFixed(3)}`
+                      : '—'}
+                  </p>
+                )}
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Barcode <span className="text-zinc-500 font-normal">(must be unique)</span></label>
               <input
                 type="text"
                 value={formData.barcode}
                 onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                placeholder="e.g. 6901234567890"
                 className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
               />
             </div>

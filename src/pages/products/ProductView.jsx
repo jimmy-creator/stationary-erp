@@ -189,7 +189,10 @@ export function ProductView() {
           'bg-green-900/50 text-green-400 border border-green-500/30'
         }`}>
           {(isOut || isLow) && <AlertTriangle className="w-4 h-4" />}
-          {isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'In Stock'} ({product.stock_quantity} {product.unit})
+          {isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'In Stock'} ({product.stock_quantity} {product.unit}
+          {product.secondary_unit && product.unit_conversion && product.stock_quantity > 0
+            ? ` = ${Math.round(product.stock_quantity * product.unit_conversion)} ${product.secondary_unit}`
+            : ''})
         </span>
       </div>
 
@@ -203,6 +206,14 @@ export function ProductView() {
             <div className="flex justify-between"><span className="text-zinc-500">Category</span><span className="text-zinc-300">{product.categories?.name || '-'}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Brand</span><span className="text-zinc-300">{product.brand || '-'}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Unit</span><span className="text-zinc-300">{product.unit}</span></div>
+            {product.secondary_unit && product.unit_conversion && (
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Sub-unit</span>
+                <span className="text-zinc-300">
+                  1 {product.unit} = {product.unit_conversion % 1 === 0 ? parseInt(product.unit_conversion) : product.unit_conversion} {product.secondary_unit}
+                </span>
+              </div>
+            )}
             {product.barcode && <div className="flex justify-between"><span className="text-zinc-500">Barcode</span><span className="text-zinc-300">{product.barcode}</span></div>}
             {product.description && <div className="pt-2 border-t border-zinc-800"><p className="text-sm text-zinc-400">{product.description}</p></div>}
           </div>
