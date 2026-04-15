@@ -158,22 +158,29 @@ export function UserForm() {
         role: 'employee',
       })
 
-      // Navigate after a short delay
-      setTimeout(() => {
+      // Ensure admin session is fully restored before navigating
+      setTimeout(async () => {
+        // Double-check we're still the admin
+        const { data: check } = await supabase.auth.getSession()
+        if (check?.session?.user?.id !== adminSession.user.id) {
+          await supabase.auth.setSession({
+            access_token: adminSession.access_token,
+            refresh_token: adminSession.refresh_token,
+          })
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
         navigate('/users')
       }, 2000)
 
     } catch (err) {
       console.error('Error creating user:', err)
 
-      // Try to restore admin session in case of error
+      // Restore admin session on error
       try {
-        const { data: sessionData } = await supabase.auth.getSession()
-        if (!sessionData?.session) {
-          // Force page reload to restore session from storage
-          window.location.reload()
-          return
-        }
+        await supabase.auth.setSession({
+          access_token: adminSession.access_token,
+          refresh_token: adminSession.refresh_token,
+        })
       } catch (e) {
         console.error('Session recovery error:', e)
       }

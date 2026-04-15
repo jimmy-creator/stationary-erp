@@ -19,6 +19,7 @@ import {
   Calculator,
   FileBarChart,
   BarChart3,
+  Settings,
   UserCog,
   LogOut,
   Menu,
@@ -85,6 +86,7 @@ export function Layout() {
   const adminSection = {
     title: 'Admin',
     items: [
+      { to: '/store-settings', label: 'Store Settings', icon: Settings, moduleKey: null },
       { to: '/users', label: 'User Management', icon: UserCog, moduleKey: null },
     ],
   }
@@ -121,8 +123,8 @@ export function Layout() {
               <Package className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-white tracking-wider">STATIONERY</h1>
-              <p className="text-[10px] text-zinc-500 tracking-widest">ERP SYSTEM</p>
+              <h1 className="text-sm font-bold text-white tracking-wider">BINTHAWAR</h1>
+              <p className="text-[10px] text-zinc-500 tracking-widest">ERP</p>
             </div>
           </div>
           <button

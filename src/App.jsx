@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { ProtectedModule } from './components/ProtectedModule'
 import { Layout } from './components/Layout'
 import { Login } from './pages/Login'
 import { Dashboard } from './pages/Dashboard'
@@ -34,6 +35,7 @@ import { AccountsReceivable } from './pages/accounts-receivable/AccountsReceivab
 import { CollectPayment } from './pages/accounts-receivable/CollectPayment'
 import { AccountsPayable } from './pages/accounts-payable/AccountsPayable'
 import { MakePayment } from './pages/accounts-payable/MakePayment'
+import { StoreSettings } from './pages/StoreSettings'
 import { UsersList } from './pages/users/UsersList'
 import { UserForm } from './pages/users/UserForm'
 import { UserPermissions } from './pages/users/UserPermissions'
@@ -54,46 +56,59 @@ function App() {
             }
           >
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/products" element={<ProductsList />} />
-            <Route path="/products/new" element={<ProductForm />} />
-            <Route path="/products/:id" element={<ProductView />} />
-            <Route path="/products/:id/edit" element={<ProductForm />} />
-            <Route path="/categories" element={<CategoriesList />} />
-            <Route path="/categories/new" element={<CategoryForm />} />
-            <Route path="/categories/:id/edit" element={<CategoryForm />} />
-            <Route path="/suppliers" element={<SuppliersList />} />
-            <Route path="/suppliers/new" element={<SupplierForm />} />
-            <Route path="/suppliers/:id" element={<SupplierView />} />
-            <Route path="/suppliers/:id/edit" element={<SupplierForm />} />
-            <Route path="/customers" element={<CustomersList />} />
-            <Route path="/customers/new" element={<CustomerForm />} />
-            <Route path="/customers/:id" element={<CustomerView />} />
-            <Route path="/customers/:id/edit" element={<CustomerForm />} />
-            <Route path="/sales" element={<SalesList />} />
-            <Route path="/sales/new" element={<SaleForm />} />
-            <Route path="/sales/:id" element={<SaleView />} />
-            <Route path="/sales/:id/edit" element={<SaleForm />} />
-            <Route path="/purchase-orders" element={<PurchaseOrdersList />} />
-            <Route path="/purchase-orders/new" element={<PurchaseOrderForm />} />
-            <Route path="/purchase-orders/:id" element={<PurchaseOrderView />} />
-            <Route path="/purchase-orders/:id/edit" element={<PurchaseOrderForm />} />
-            <Route path="/expenses" element={<ExpensesList />} />
-            <Route path="/expenses/new" element={<ExpenseForm />} />
-            <Route path="/expenses/:id/edit" element={<ExpenseForm />} />
-            <Route path="/employees" element={<EmployeesList />} />
-            <Route path="/employees/new" element={<EmployeeForm />} />
-            <Route path="/employees/:id" element={<EmployeeView />} />
-            <Route path="/employees/:id/edit" element={<EmployeeForm />} />
-            <Route path="/daily-cash" element={<DailyCash />} />
-            <Route path="/profit-loss" element={<ProfitLoss />} />
-            <Route path="/stock-value" element={<StockValue />} />
-            <Route path="/accounts-receivable" element={<AccountsReceivable />} />
-            <Route path="/accounts-receivable/:id/collect" element={<CollectPayment />} />
-            <Route path="/accounts-payable" element={<AccountsPayable />} />
-            <Route path="/accounts-payable/:id/pay" element={<MakePayment />} />
-            <Route path="/users" element={<UsersList />} />
-            <Route path="/users/new" element={<UserForm />} />
-            <Route path="/users/:id/permissions" element={<UserPermissions />} />
+
+            {/* Store */}
+            <Route path="/products" element={<ProtectedModule moduleKey="products"><ProductsList /></ProtectedModule>} />
+            <Route path="/products/new" element={<ProtectedModule moduleKey="products"><ProductForm /></ProtectedModule>} />
+            <Route path="/products/:id" element={<ProtectedModule moduleKey="products"><ProductView /></ProtectedModule>} />
+            <Route path="/products/:id/edit" element={<ProtectedModule moduleKey="products"><ProductForm /></ProtectedModule>} />
+            <Route path="/categories" element={<ProtectedModule moduleKey="categories"><CategoriesList /></ProtectedModule>} />
+            <Route path="/categories/new" element={<ProtectedModule moduleKey="categories"><CategoryForm /></ProtectedModule>} />
+            <Route path="/categories/:id/edit" element={<ProtectedModule moduleKey="categories"><CategoryForm /></ProtectedModule>} />
+            <Route path="/sales" element={<ProtectedModule moduleKey="sales"><SalesList /></ProtectedModule>} />
+            <Route path="/sales/new" element={<ProtectedModule moduleKey="sales"><SaleForm /></ProtectedModule>} />
+            <Route path="/sales/:id" element={<ProtectedModule moduleKey="sales"><SaleView /></ProtectedModule>} />
+            <Route path="/sales/:id/edit" element={<ProtectedModule moduleKey="sales"><SaleForm /></ProtectedModule>} />
+            <Route path="/customers" element={<ProtectedModule moduleKey="customers"><CustomersList /></ProtectedModule>} />
+            <Route path="/customers/new" element={<ProtectedModule moduleKey="customers"><CustomerForm /></ProtectedModule>} />
+            <Route path="/customers/:id" element={<ProtectedModule moduleKey="customers"><CustomerView /></ProtectedModule>} />
+            <Route path="/customers/:id/edit" element={<ProtectedModule moduleKey="customers"><CustomerForm /></ProtectedModule>} />
+
+            {/* Procurement */}
+            <Route path="/suppliers" element={<ProtectedModule moduleKey="suppliers"><SuppliersList /></ProtectedModule>} />
+            <Route path="/suppliers/new" element={<ProtectedModule moduleKey="suppliers"><SupplierForm /></ProtectedModule>} />
+            <Route path="/suppliers/:id" element={<ProtectedModule moduleKey="suppliers"><SupplierView /></ProtectedModule>} />
+            <Route path="/suppliers/:id/edit" element={<ProtectedModule moduleKey="suppliers"><SupplierForm /></ProtectedModule>} />
+            <Route path="/purchase-orders" element={<ProtectedModule moduleKey="purchase-orders"><PurchaseOrdersList /></ProtectedModule>} />
+            <Route path="/purchase-orders/new" element={<ProtectedModule moduleKey="purchase-orders"><PurchaseOrderForm /></ProtectedModule>} />
+            <Route path="/purchase-orders/:id" element={<ProtectedModule moduleKey="purchase-orders"><PurchaseOrderView /></ProtectedModule>} />
+            <Route path="/purchase-orders/:id/edit" element={<ProtectedModule moduleKey="purchase-orders"><PurchaseOrderForm /></ProtectedModule>} />
+
+            {/* Finance */}
+            <Route path="/expenses" element={<ProtectedModule moduleKey="expenses"><ExpensesList /></ProtectedModule>} />
+            <Route path="/expenses/new" element={<ProtectedModule moduleKey="expenses"><ExpenseForm /></ProtectedModule>} />
+            <Route path="/expenses/:id/edit" element={<ProtectedModule moduleKey="expenses"><ExpenseForm /></ProtectedModule>} />
+            <Route path="/accounts-receivable" element={<ProtectedModule moduleKey="accounts-receivable"><AccountsReceivable /></ProtectedModule>} />
+            <Route path="/accounts-receivable/:id/collect" element={<ProtectedModule moduleKey="accounts-receivable"><CollectPayment /></ProtectedModule>} />
+            <Route path="/accounts-payable" element={<ProtectedModule moduleKey="accounts-payable"><AccountsPayable /></ProtectedModule>} />
+            <Route path="/accounts-payable/:id/pay" element={<ProtectedModule moduleKey="accounts-payable"><MakePayment /></ProtectedModule>} />
+            <Route path="/daily-cash" element={<ProtectedModule moduleKey="daily-cash"><DailyCash /></ProtectedModule>} />
+
+            {/* Reports */}
+            <Route path="/profit-loss" element={<ProtectedModule moduleKey="profit-loss"><ProfitLoss /></ProtectedModule>} />
+            <Route path="/stock-value" element={<ProtectedModule moduleKey="stock-value"><StockValue /></ProtectedModule>} />
+
+            {/* People */}
+            <Route path="/employees" element={<ProtectedModule moduleKey="employees"><EmployeesList /></ProtectedModule>} />
+            <Route path="/employees/new" element={<ProtectedModule moduleKey="employees"><EmployeeForm /></ProtectedModule>} />
+            <Route path="/employees/:id" element={<ProtectedModule moduleKey="employees"><EmployeeView /></ProtectedModule>} />
+            <Route path="/employees/:id/edit" element={<ProtectedModule moduleKey="employees"><EmployeeForm /></ProtectedModule>} />
+
+            {/* Admin only */}
+            <Route path="/store-settings" element={<ProtectedModule adminOnly><StoreSettings /></ProtectedModule>} />
+            <Route path="/users" element={<ProtectedModule adminOnly><UsersList /></ProtectedModule>} />
+            <Route path="/users/new" element={<ProtectedModule adminOnly><UserForm /></ProtectedModule>} />
+            <Route path="/users/:id/permissions" element={<ProtectedModule adminOnly><UserPermissions /></ProtectedModule>} />
           </Route>
 
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -4,8 +4,10 @@ import { supabase } from '../../lib/supabase'
 import { DollarSign, AlertTriangle, Clock, CheckCircle, Printer } from 'lucide-react'
 import { SearchInput } from '../../components/SearchInput'
 import { useDebounce } from '../../hooks/useDebounce'
+import { useStoreSettings } from '../../hooks/useStoreSettings'
 
 export function AccountsReceivable() {
+  const { settings: store } = useStoreSettings()
   const [sales, setSales] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -129,7 +131,10 @@ export function AccountsReceivable() {
       {/* ══ Printable Report (hidden on screen, visible on print) ══ */}
       <div className="hidden print:block print-area">
         <div style={{ padding: '0' }}>
-          <h1 style={{ fontSize: '18pt', fontWeight: 700, marginBottom: '4px', color: '#111' }}>Accounts Receivable Report</h1>
+          <h1 style={{ fontSize: '18pt', fontWeight: 700, marginBottom: '2px', color: '#111' }}>{store.store_name}</h1>
+          {store.address && <p style={{ fontSize: '9pt', color: '#666', whiteSpace: 'pre-wrap', margin: 0 }}>{store.address}</p>}
+          {(store.phone || store.email) && <p style={{ fontSize: '9pt', color: '#666', margin: 0 }}>{store.phone && `Tel: ${store.phone}`}{store.phone && store.email && ' | '}{store.email}</p>}
+          <h2 style={{ fontSize: '14pt', fontWeight: 600, marginTop: '12px', marginBottom: '4px', color: '#111' }}>Accounts Receivable Report</h2>
           <p style={{ fontSize: '10pt', color: '#666', marginBottom: '20px' }}>
             Generated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
             {filter.customer && ` | Customer: ${filter.customer}`}

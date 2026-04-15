@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useStoreSettings } from '../../hooks/useStoreSettings'
 
 export function PurchaseOrderView() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { settings: store } = useStoreSettings()
   const [order, setOrder] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -86,7 +88,14 @@ export function PurchaseOrderView() {
         <div className="p-4 lg:p-6 border-b border-zinc-800">
           <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-white">PURCHASE ORDER</h1>
+              <h1 className="text-2xl font-bold text-white">{store.store_name || 'PURCHASE ORDER'}</h1>
+              {store.address && <p className="text-sm text-zinc-400 whitespace-pre-wrap">{store.address}</p>}
+              {(store.phone || store.email) && (
+                <p className="text-sm text-zinc-500">
+                  {store.phone && `Tel: ${store.phone}`}{store.phone && store.email && ' | '}{store.email && store.email}
+                </p>
+              )}
+              <p className="text-sm font-semibold text-zinc-300 mt-2">PURCHASE ORDER</p>
               <p className="text-lg font-semibold text-teal-400">{order.po_number}</p>
             </div>
             <div className="sm:text-right">

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useStoreSettings } from '../../hooks/useStoreSettings'
 
 export function SaleView() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { settings: store } = useStoreSettings()
   const [sale, setSale] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -103,8 +105,14 @@ export function SaleView() {
         <div className="p-4 lg:p-6 border-b border-zinc-800">
           <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-white">INVOICE</h1>
-              <p className="text-lg font-semibold text-teal-400">{sale.invoice_number}</p>
+              <h1 className="text-2xl font-bold text-white">{store.store_name || 'INVOICE'}</h1>
+              {store.address && <p className="text-sm text-zinc-400 whitespace-pre-wrap">{store.address}</p>}
+              {(store.phone || store.email) && (
+                <p className="text-sm text-zinc-500">
+                  {store.phone && `Tel: ${store.phone}`}{store.phone && store.email && ' | '}{store.email && store.email}
+                </p>
+              )}
+              <p className="text-lg font-semibold text-teal-400 mt-2">{sale.invoice_number}</p>
             </div>
             <div className="sm:text-right">
               <p className="text-sm text-zinc-500">Date: {formatDate(sale.sale_date)}</p>
