@@ -227,31 +227,32 @@ export function SaleView() {
       }}>
 
         {/* ── Store Header ── */}
-        <div style={{ marginBottom: '14px' }}>
-          <div style={{ fontSize: '24px', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '6px', textTransform: 'uppercase', color: DARK }}>
+        <div style={{ marginBottom: '10px' }}>
+          <div style={{ fontSize: '22px', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '4px', textTransform: 'uppercase', color: DARK }}>
             {store.store_name || 'BINTHAWAR ERP'}
           </div>
           {store.address && (
-            <div style={{ color: GRAY, lineHeight: '1.7', whiteSpace: 'pre-wrap', fontSize: '13px' }}>
+            <div style={{ color: GRAY, lineHeight: '1.5', whiteSpace: 'pre-wrap', fontSize: '12px' }}>
               {store.address}
             </div>
           )}
-          <div style={{ color: GRAY, fontSize: '13px', lineHeight: '1.7', marginTop: '2px' }}>
+          <div style={{ color: GRAY, fontSize: '12px', lineHeight: '1.5', marginTop: '2px' }}>
             {store.phone && <span>Phone no. : {store.phone}</span>}
             {store.phone && store.email && <span>{'  |  '}</span>}
             {store.email && <span>Email : {store.email}</span>}
           </div>
         </div>
 
-        <hr style={{ border: 'none', borderTop: '2px solid #222222', marginBottom: '16px' }} />
+        {/* Use div background instead of <hr> — border-color gets overridden by print CSS */}
+        <div style={{ height: '2px', backgroundColor: '#222222', marginBottom: '10px' }} />
 
         {/* ── Invoice Title ── */}
         <div style={{
           textAlign: 'center',
-          fontSize: '20px',
+          fontSize: '18px',
           fontWeight: '700',
           color: GREEN,
-          marginBottom: '18px',
+          marginBottom: '12px',
           letterSpacing: '2px',
           textTransform: 'uppercase',
         }}>
@@ -259,20 +260,20 @@ export function SaleView() {
         </div>
 
         {/* ── Bill To / Invoice Details ── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
           <div>
-            <div style={{ fontSize: '12px', color: GRAY, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '700' }}>Bill To</div>
-            <div style={{ fontSize: '18px', fontWeight: '700', color: DARK }}>{sale.customer_name || 'Walk-in Customer'}</div>
+            <div style={{ fontSize: '11px', color: GRAY, marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '700' }}>Bill To</div>
+            <div style={{ fontSize: '16px', fontWeight: '700', color: DARK }}>{sale.customer_name || 'Walk-in Customer'}</div>
             {customer?.address && (
-              <div style={{ fontSize: '13px', color: GRAY, marginTop: '4px', whiteSpace: 'pre-wrap' }}>{customer.address}</div>
+              <div style={{ fontSize: '12px', color: GRAY, marginTop: '2px', whiteSpace: 'pre-wrap' }}>{customer.address}</div>
             )}
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '12px', color: GRAY, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '700' }}>Invoice Details</div>
-            <div style={{ fontSize: '14px', marginBottom: '3px', color: DARK }}>
+            <div style={{ fontSize: '11px', color: GRAY, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '700' }}>Invoice Details</div>
+            <div style={{ fontSize: '13px', marginBottom: '2px', color: DARK }}>
               Invoice No. : <strong>{sale.invoice_number}</strong>
             </div>
-            <div style={{ fontSize: '14px', color: DARK }}>
+            <div style={{ fontSize: '13px', color: DARK }}>
               Date : <strong>{fmtDate(sale.sale_date)}</strong>
             </div>
           </div>
@@ -282,25 +283,28 @@ export function SaleView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '0' }}>
           <thead>
             <tr>
-              {/* backgroundColor on <th> not <tr> — reliable on all platforms */}
               {[
-                { label: '#',           align: 'center', width: '36px'  },
-                { label: 'Item Name',   align: 'left',   width: null    },
-                { label: 'Quantity',    align: 'center', width: '70px'  },
-                { label: 'Unit',        align: 'center', width: '55px'  },
-                { label: 'Price / Unit',align: 'right',  width: '115px' },
-                { label: 'Amount',      align: 'right',  width: '115px' },
+                { label: '#',            align: 'center', width: '30px'  },
+                { label: 'Item Name',    align: 'left',   width: null    },
+                { label: 'Item Code',    align: 'left',   width: '100px' },
+                { label: 'Qty',          align: 'center', width: '45px'  },
+                { label: 'Unit',         align: 'center', width: '45px'  },
+                { label: 'Price / Unit', align: 'right',  width: '100px' },
+                { label: 'Amount',       align: 'right',  width: '90px'  },
               ].map((col) => (
                 <th key={col.label} style={{
                   backgroundColor: GREEN,
+                  // box-shadow trick: prints even when "Background graphics" is OFF in Windows Chrome
+                  boxShadow: `inset 0 0 0 1000px ${GREEN}`,
                   color: '#ffffff',
-                  padding: '10px 10px',
+                  padding: '7px 8px',
                   textAlign: col.align,
                   fontWeight: '700',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   width: col.width || undefined,
                   WebkitPrintColorAdjust: 'exact',
                   printColorAdjust: 'exact',
+                  colorAdjust: 'exact',
                 }}>
                   {col.label}
                 </th>
@@ -313,26 +317,24 @@ export function SaleView() {
               const cell = {
                 backgroundColor: bg,
                 borderBottom: '1px solid #cccccc',
-                verticalAlign: 'top',
-                padding: '10px 10px',
+                verticalAlign: 'middle',
+                padding: '6px 8px',
                 color: DARK,
-                fontSize: '14px',
+                fontSize: '13px',
               }
               const barcode = item.products?.barcode || item.products?.sku || ''
               const unit = item.products?.unit || ''
               return (
                 <tr key={item.id}>
                   <td style={{ ...cell, textAlign: 'center', fontWeight: '700' }}>{i + 1}</td>
-                  <td style={{ ...cell }}>
-                    <div style={{ fontWeight: '700', fontSize: '15px', color: DARK }}>{item.product_name}</div>
-                    {barcode && <div style={{ fontSize: '12px', color: LIGHT_GRAY, marginTop: '2px' }}>{barcode}</div>}
-                  </td>
-                  <td style={{ ...cell, textAlign: 'center', fontSize: '15px' }}>{item.quantity}</td>
+                  <td style={{ ...cell, fontWeight: '700', fontSize: '13px' }}>{item.product_name}</td>
+                  <td style={{ ...cell, fontSize: '12px', color: LIGHT_GRAY }}>{barcode}</td>
+                  <td style={{ ...cell, textAlign: 'center' }}>{item.quantity}</td>
                   <td style={{ ...cell, textAlign: 'center', color: GRAY }}>{unit}</td>
                   <td style={{ ...cell, textAlign: 'right' }}>
                     QR {parseFloat(item.unit_price || 0).toFixed(4)}
                   </td>
-                  <td style={{ ...cell, textAlign: 'right', fontWeight: '700', fontSize: '15px' }}>
+                  <td style={{ ...cell, textAlign: 'right', fontWeight: '700' }}>
                     QR {parseFloat(item.total_price || 0).toFixed(2)}
                   </td>
                 </tr>
@@ -346,7 +348,7 @@ export function SaleView() {
           <tbody>
             <tr>
               {/* Amount in words */}
-              <td style={{ padding: '12px 10px', verticalAlign: 'middle', width: '52%', color: DARK }}>
+              <td style={{ padding: '8px 8px', verticalAlign: 'middle', width: '52%', color: DARK }}>
                 <span style={{ fontWeight: '700', fontSize: '13px' }}>Invoice Amount in Words: </span>
                 <span style={{ fontSize: '13px' }}>{numberToWords(sale.grand_total || 0)}</span>
               </td>
@@ -363,29 +365,28 @@ export function SaleView() {
                       </tr>
                     )}
                     <tr>
-                      <td style={{ padding: '8px 10px', textAlign: 'left',  fontSize: '14px', color: GRAY, borderBottom: '1px solid #dddddd' }}>Sub Total</td>
-                      <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '14px', color: DARK, borderBottom: '1px solid #dddddd' }}>
+                      <td style={{ padding: '6px 8px', textAlign: 'left',  fontSize: '13px', color: GRAY, borderBottom: '1px solid #dddddd' }}>Sub Total</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontSize: '13px', color: DARK, borderBottom: '1px solid #dddddd' }}>
                         QR {parseFloat(sale.subtotal || 0).toFixed(2)}
                       </td>
                     </tr>
                     <tr>
-                      {/* backgroundColor on <td> not <tr> — safe across platforms */}
-                      <td style={{ padding: '11px 10px', textAlign: 'left',  fontWeight: '700', fontSize: '17px', color: DARK, backgroundColor: '#eeeeee', borderTop: '2px solid #aaaaaa' }}>Total</td>
-                      <td style={{ padding: '11px 10px', textAlign: 'right', fontWeight: '700', fontSize: '17px', color: DARK, backgroundColor: '#eeeeee', borderTop: '2px solid #aaaaaa' }}>
+                      <td style={{ padding: '8px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '15px', color: DARK, backgroundColor: '#eeeeee', borderTop: '2px solid #aaaaaa' }}>Total</td>
+                      <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: '700', fontSize: '15px', color: DARK, backgroundColor: '#eeeeee', borderTop: '2px solid #aaaaaa' }}>
                         QR {parseFloat(sale.grand_total || 0).toFixed(2)}
                       </td>
                     </tr>
                     {sale.payment_status !== 'paid' && (
                       <>
                         <tr>
-                          <td style={{ padding: '8px 10px', textAlign: 'left',  fontSize: '14px', color: GRAY, borderBottom: '1px solid #dddddd' }}>Amount Paid</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '14px', color: DARK, borderBottom: '1px solid #dddddd' }}>
+                          <td style={{ padding: '6px 8px', textAlign: 'left',  fontSize: '13px', color: GRAY, borderBottom: '1px solid #dddddd' }}>Amount Paid</td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontSize: '13px', color: DARK, borderBottom: '1px solid #dddddd' }}>
                             QR {parseFloat(sale.amount_paid || 0).toFixed(2)}
                           </td>
                         </tr>
                         <tr>
-                          <td style={{ padding: '8px 10px', textAlign: 'left',  fontWeight: '700', fontSize: '14px', color: '#cc0000' }}>Balance Due</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: '700', fontSize: '14px', color: '#cc0000' }}>
+                          <td style={{ padding: '6px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '13px', color: '#cc0000' }}>Balance Due</td>
+                          <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: '#cc0000' }}>
                             QR {parseFloat(balanceDue).toFixed(2)}
                           </td>
                         </tr>

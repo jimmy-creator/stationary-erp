@@ -65,12 +65,33 @@ export function ProductForm() {
 
   useEffect(() => {
     fetchCategories()
-    if (isEditing) fetchProduct()
+    if (isEditing) {
+      fetchProduct()
+    } else {
+      fetchNextBarcode()
+    }
   }, [id])
 
   const fetchCategories = async () => {
     const { data } = await supabase.from('categories').select('*').order('name')
     setCategories(data || [])
+  }
+
+  const fetchNextBarcode = async () => {
+    const { data } = await supabase
+      .from('products')
+      .select('barcode')
+      .not('barcode', 'is', null)
+
+    // Find the highest numeric barcode
+    let max = 999
+    if (data && data.length > 0) {
+      data.forEach(({ barcode }) => {
+        const n = parseInt(barcode, 10)
+        if (!isNaN(n) && n > max) max = n
+      })
+    }
+    setFormData((prev) => ({ ...prev, barcode: String(max + 1) }))
   }
 
   const fetchProduct = async () => {
@@ -397,12 +418,12 @@ export function ProductForm() {
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-1">Barcode <span className="text-zinc-500 font-normal">(must be unique)</span></label>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Barcode <span className="text-zinc-500 font-normal">(auto-assigned, can edit)</span></label>
               <input
                 type="text"
                 value={formData.barcode}
                 onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                placeholder="e.g. 6901234567890"
+                placeholder="Auto-assigned"
                 className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
               />
             </div>
