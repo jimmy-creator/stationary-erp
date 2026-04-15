@@ -247,11 +247,10 @@ export function SaleView() {
         <div style={{ height: '2px', backgroundColor: '#222222', marginBottom: '10px' }} />
 
         {/* ── Invoice Title ── */}
-        <div style={{
+        <div className="inv-green" style={{
           textAlign: 'center',
           fontSize: '18px',
           fontWeight: '700',
-          color: GREEN,
           marginBottom: '12px',
           letterSpacing: '2px',
           textTransform: 'uppercase',
@@ -292,11 +291,10 @@ export function SaleView() {
                 { label: 'Price / Unit', align: 'right',  width: '100px' },
                 { label: 'Amount',       align: 'right',  width: '90px'  },
               ].map((col) => (
-                <th key={col.label} style={{
-                  backgroundColor: GREEN,
-                  // box-shadow trick: prints even when "Background graphics" is OFF in Windows Chrome
-                  boxShadow: `inset 0 0 0 1000px ${GREEN}`,
-                  color: '#ffffff',
+                <th key={col.label} className="inv-white" style={{
+                  // linear-gradient used instead of backgroundColor:
+                  // it prints without "Background graphics" and has no stacking context side effects
+                  backgroundImage: `linear-gradient(${GREEN}, ${GREEN})`,
                   padding: '7px 8px',
                   textAlign: col.align,
                   fontWeight: '700',
@@ -315,7 +313,7 @@ export function SaleView() {
             {items.map((item, i) => {
               const bg = i % 2 === 0 ? '#f5f5f5' : '#ffffff'
               const cell = {
-                backgroundColor: bg,
+                backgroundImage: `linear-gradient(${bg}, ${bg})`,
                 borderBottom: '1px solid #cccccc',
                 verticalAlign: 'middle',
                 padding: '6px 8px',
@@ -371,8 +369,8 @@ export function SaleView() {
                       </td>
                     </tr>
                     <tr>
-                      <td style={{ padding: '8px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '15px', color: DARK, backgroundColor: '#eeeeee', borderTop: '2px solid #aaaaaa' }}>Total</td>
-                      <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: '700', fontSize: '15px', color: DARK, backgroundColor: '#eeeeee', borderTop: '2px solid #aaaaaa' }}>
+                      <td style={{ padding: '8px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '15px', backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderTop: '2px solid #aaaaaa' }}>Total</td>
+                      <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: '700', fontSize: '15px', backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderTop: '2px solid #aaaaaa' }}>
                         QR {parseFloat(sale.grand_total || 0).toFixed(2)}
                       </td>
                     </tr>
