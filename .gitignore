@@ -30,3 +30,6 @@ dist-ssr
 .augment
 .bob
 backups/
+
+# Local Netlify folder
+.netlify

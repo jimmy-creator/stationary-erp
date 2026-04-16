@@ -130,7 +130,7 @@ export function AccountsReceivable() {
     <div>
       {/* ══ Printable Report (hidden on screen, visible on print) ══ */}
       <div className="hidden print:block print-area">
-        <div style={{ padding: '0' }}>
+        <div style={{ padding: '28px 32px' }}>
           <h1 style={{ fontSize: '18pt', fontWeight: 700, marginBottom: '2px', color: '#111' }}>{store.store_name}</h1>
           {store.address && <p style={{ fontSize: '9pt', color: '#666', whiteSpace: 'pre-wrap', margin: 0 }}>{store.address}</p>}
           {(store.phone || store.email) && <p style={{ fontSize: '9pt', color: '#666', margin: 0 }}>{store.phone && `Tel: ${store.phone}`}{store.phone && store.email && ' | '}{store.email}</p>}

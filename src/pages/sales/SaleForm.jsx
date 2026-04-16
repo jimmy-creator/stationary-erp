@@ -7,18 +7,21 @@ import { Plus, Trash2 } from 'lucide-react'
 export function SaleForm() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const isEditing = Boolean(id)
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [customers, setCustomers] = useState([])
   const [products, setProducts] = useState([])
+  const [salespeople, setSalespeople] = useState([])
 
   const [formData, setFormData] = useState({
     sale_date: new Date().toISOString().split('T')[0],
     customer_id: '',
     customer_name: '',
+    salesperson_id: '',
+    salesperson_name: '',
     discount_percentage: '0',
     tax_percentage: '0',
     payment_method: 'cash',
@@ -40,12 +43,14 @@ export function SaleForm() {
   }, [id])
 
   const fetchData = async () => {
-    const [customersRes, productsRes] = await Promise.all([
+    const [customersRes, productsRes, salespeopleRes] = await Promise.all([
       supabase.from('customers').select('id, name').eq('is_active', true).order('name'),
       supabase.from('products').select('id, name, selling_price, stock_quantity, unit').eq('is_active', true).order('name'),
+      supabase.from('profiles').select('id, email').order('email'),
     ])
     setCustomers(customersRes.data || [])
     setProducts(productsRes.data || [])
+    setSalespeople(salespeopleRes.data || [])
   }
 
   const fetchSale = async () => {
@@ -63,6 +68,8 @@ export function SaleForm() {
         sale_date: sale.sale_date,
         customer_id: sale.customer_id || '',
         customer_name: sale.customer_name || '',
+        salesperson_id: sale.salesperson_id || '',
+        salesperson_name: sale.salesperson_name || '',
         discount_percentage: sale.discount_percentage?.toString() || '0',
         tax_percentage: sale.tax_percentage?.toString() || '15',
         payment_method: sale.payment_method || 'cash',
@@ -309,6 +316,8 @@ export function SaleForm() {
         notes: formData.notes || null,
         status: formData.status,
         created_by_email: isEditing ? undefined : (user?.email || null),
+        salesperson_id: formData.salesperson_id || null,
+        salesperson_name: formData.salesperson_name || null,
       }
 
       let saleId = id
@@ -389,6 +398,24 @@ export function SaleForm() {
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+            {isAdmin && (
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-1">Salesperson</label>
+                <select
+                  value={formData.salesperson_id}
+                  onChange={(e) => {
+                    const sp = salespeople.find((p) => p.id === e.target.value)
+                    setFormData({ ...formData, salesperson_id: e.target.value, salesperson_name: sp?.email?.split('@')[0] || '' })
+                  }}
+                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+                >
+                  <option value="">— Not assigned —</option>
+                  {salespeople.map((sp) => (
+                    <option key={sp.id} value={sp.id}>{sp.email?.split('@')[0]}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Status</label>
               <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">

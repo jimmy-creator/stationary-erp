@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ShoppingCart, Clock, CheckCircle } from 'lucide-react'
+import { ShoppingCart, Clock, CheckCircle, Printer } from 'lucide-react'
 import { SearchInput } from '../../components/SearchInput'
 import { useDebounce } from '../../hooks/useDebounce'
+import { useStoreSettings } from '../../hooks/useStoreSettings'
 
 export function SalesList() {
+  const { settings: store } = useStoreSettings()
   const [sales, setSales] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -33,12 +35,17 @@ export function SalesList() {
     // Fetch distinct months and salespeople for filter dropdowns
     const { data: allSales } = await supabase
       .from('sales')
-      .select('sale_date, created_by_email')
+      .select('sale_date, created_by_email, salesperson_name')
 
     if (allSales) {
       const months = [...new Set(allSales.map((s) => s.sale_date?.substring(0, 7)).filter(Boolean))].sort().reverse()
-      const salespeople = [...new Set(allSales.map((s) => s.created_by_email).filter(Boolean))].sort()
-      setFilterOptions({ months, salespeople })
+      // Build a unique list of display names (salesperson_name takes priority, fall back to email prefix)
+      const nameSet = new Set()
+      allSales.forEach((s) => {
+        const name = s.salesperson_name || s.created_by_email?.split('@')[0]
+        if (name) nameSet.add(name)
+      })
+      setFilterOptions({ months, salespeople: [...nameSet].sort() })
     }
   }
 
@@ -54,7 +61,7 @@ export function SalesList() {
       }
       if (filter.status) query = query.eq('status', filter.status)
       if (filter.payment) query = query.eq('payment_status', filter.payment)
-      if (filter.createdBy) query = query.eq('created_by_email', filter.createdBy)
+      if (filter.createdBy) query = query.or(`salesperson_name.eq.${filter.createdBy},and(salesperson_name.is.null,created_by_email.ilike.${filter.createdBy}@%)`)
       if (filter.month) {
         const [y, m] = filter.month.split('-')
         const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
@@ -74,7 +81,7 @@ export function SalesList() {
       if (debouncedSearch) statsQuery = statsQuery.or(`invoice_number.ilike.%${debouncedSearch}%,customer_name.ilike.%${debouncedSearch}%`)
       if (filter.status) statsQuery = statsQuery.eq('status', filter.status)
       if (filter.payment) statsQuery = statsQuery.eq('payment_status', filter.payment)
-      if (filter.createdBy) statsQuery = statsQuery.eq('created_by_email', filter.createdBy)
+      if (filter.createdBy) statsQuery = statsQuery.or(`salesperson_name.eq.${filter.createdBy},and(salesperson_name.is.null,created_by_email.ilike.${filter.createdBy}@%)`)
       if (filter.month) {
         const [y, m] = filter.month.split('-')
         const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate()
@@ -123,13 +130,99 @@ export function SalesList() {
     return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
   }
 
+  const formatDateShort = (date) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+
+  const activeFilters = [
+    filter.status && `Status: ${filter.status}`,
+    filter.payment && `Payment: ${filter.payment}`,
+    filter.month && `Month: ${new Date(filter.month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`,
+    filter.createdBy && `Sold by: ${filter.createdBy}`,
+    debouncedSearch && `Search: "${debouncedSearch}"`,
+  ].filter(Boolean)
+
   return (
     <div>
+      {/* ══ Printable Report ══ */}
+      <div className="hidden print:block print-area">
+        <div style={{ padding: '28px 32px' }}>
+          <h1 style={{ fontSize: '18pt', fontWeight: 700, marginBottom: '2px', color: '#111' }}>{store.store_name}</h1>
+          {store.address && <p style={{ fontSize: '9pt', color: '#666', whiteSpace: 'pre-wrap', margin: 0 }}>{store.address}</p>}
+          {(store.phone || store.email) && <p style={{ fontSize: '9pt', color: '#666', margin: 0 }}>{store.phone && `Tel: ${store.phone}`}{store.phone && store.email && ' | '}{store.email}</p>}
+
+          <h2 style={{ fontSize: '14pt', fontWeight: 600, marginTop: '12px', marginBottom: '4px', color: '#111' }}>Sales Report</h2>
+          <p style={{ fontSize: '10pt', color: '#666', marginBottom: activeFilters.length ? '4px' : '20px' }}>
+            Generated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+          {activeFilters.length > 0 && (
+            <p style={{ fontSize: '9pt', color: '#666', marginBottom: '20px' }}>{activeFilters.join(' · ')}</p>
+          )}
+
+          {/* Summary */}
+          <div style={{ display: 'flex', gap: '32px', marginBottom: '24px', borderBottom: '2px solid #e5e7eb', paddingBottom: '12px' }}>
+            <div>
+              <p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase', margin: 0 }}>Total Sales</p>
+              <p style={{ fontSize: '16pt', fontWeight: 700, color: '#111', margin: 0 }}>{stats.total}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase', margin: 0 }}>Revenue</p>
+              <p style={{ fontSize: '16pt', fontWeight: 700, color: '#111', margin: 0 }}>{formatCurrency(stats.revenue)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase', margin: 0 }}>Unpaid / Partial</p>
+              <p style={{ fontSize: '16pt', fontWeight: 700, color: '#dc2626', margin: 0 }}>{stats.unpaid}</p>
+            </div>
+          </div>
+
+          {/* Sales Table */}
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #d1d5db' }}>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Invoice</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Date</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Customer</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Sold By</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Payment</th>
+                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Status</th>
+                <th style={{ textAlign: 'right', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sales.map((sale) => (
+                <tr key={sale.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '6px', color: '#111', fontWeight: 500 }}>{sale.invoice_number}</td>
+                  <td style={{ padding: '6px', color: '#666' }}>{formatDateShort(sale.sale_date)}</td>
+                  <td style={{ padding: '6px', color: '#374151' }}>{sale.customer_name || 'Walk-in'}</td>
+                  <td style={{ padding: '6px', color: '#374151' }}>{sale.salesperson_name || (sale.created_by_email ? sale.created_by_email.split('@')[0] : '-')}</td>
+                  <td style={{ padding: '6px', color: '#374151' }}>{paymentLabels[sale.payment_method] || '-'}</td>
+                  <td style={{ padding: '6px', color: sale.status === 'completed' ? '#16a34a' : sale.status === 'returned' ? '#ea580c' : '#dc2626' }}>
+                    {statusLabels[sale.status]?.label || sale.status}
+                  </td>
+                  <td style={{ padding: '6px', textAlign: 'right', fontWeight: 600, color: '#111' }}>{formatCurrency(sale.grand_total)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTop: '2px solid #111' }}>
+                <td colSpan={6} style={{ padding: '8px 6px', fontWeight: 700, color: '#111' }}>Total ({sales.length} invoices)</td>
+                <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 700, color: '#111' }}>{formatCurrency(sales.reduce((s, sale) => s + parseFloat(sale.grand_total || 0), 0))}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* ══ Screen UI ══ */}
+      <div className="print:hidden">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h1 className="text-xl lg:text-2xl font-bold text-white">Sales</h1>
-        <Link to="/sales/new" className="w-full sm:w-auto text-center bg-gradient-to-r from-teal-600 to-teal-500 text-white px-4 py-2 rounded-md hover:from-teal-500 hover:to-teal-400 transition-colors">
-          + New Sale
-        </Link>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:bg-zinc-700 transition-colors">
+            <Printer className="w-4 h-4" /> Print Report
+          </button>
+          <Link to="/sales/new" className="flex-1 sm:flex-none text-center bg-gradient-to-r from-teal-600 to-teal-500 text-white px-4 py-2 rounded-md hover:from-teal-500 hover:to-teal-400 transition-colors">
+            + New Sale
+          </Link>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -232,7 +325,7 @@ export function SalesList() {
                     <td className="px-6 py-4 text-sm font-medium text-teal-400">{sale.invoice_number}</td>
                     <td className="px-6 py-4 text-sm text-zinc-400">{formatDate(sale.sale_date)}</td>
                     <td className="px-6 py-4 text-sm text-zinc-300">{sale.customer_name || 'Walk-in'}</td>
-                    <td className="px-6 py-4 text-sm text-zinc-400">{sale.created_by_email ? sale.created_by_email.split('@')[0] : '-'}</td>
+                    <td className="px-6 py-4 text-sm text-zinc-400">{sale.salesperson_name || (sale.created_by_email ? sale.created_by_email.split('@')[0] : '-')}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <span className="text-xs text-zinc-400">{paymentLabels[sale.payment_method]}</span>
@@ -270,7 +363,7 @@ export function SalesList() {
                 </div>
                 <div className="flex justify-between items-center">
                   <p className="text-zinc-200">{sale.customer_name || 'Walk-in'}</p>
-                  {sale.created_by_email && <span className="text-xs text-zinc-500">{sale.created_by_email.split('@')[0]}</span>}
+                  {(sale.salesperson_name || sale.created_by_email) && <span className="text-xs text-zinc-500">{sale.salesperson_name || sale.created_by_email.split('@')[0]}</span>}
                 </div>
                 <div className="flex justify-between items-center mt-2">
                   <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${paymentStatusLabels[sale.payment_status]?.class}`}>
@@ -311,6 +404,7 @@ export function SalesList() {
           )}
         </>
       )}
+      </div>
     </div>
   )
 }

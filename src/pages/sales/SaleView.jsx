@@ -169,7 +169,9 @@ export function SaleView() {
           <p className="text-sm text-zinc-500 mb-1">Customer</p>
           <p className="text-zinc-200 font-medium">{sale.customer_name || 'Walk-in Customer'}</p>
           <p className="text-sm text-zinc-400 mt-1">Payment: {paymentLabels[sale.payment_method]}</p>
-          {sale.created_by_email && <p className="text-sm text-zinc-400">Sold by: {sale.created_by_email}</p>}
+          {(sale.salesperson_name || sale.created_by_email) && (
+            <p className="text-sm text-zinc-400">Sold by: {sale.salesperson_name || sale.created_by_email?.split('@')[0]}</p>
+          )}
         </div>
         <div className="p-4 lg:p-6 border-b border-zinc-800 overflow-x-auto">
           <table className="min-w-full text-sm">
