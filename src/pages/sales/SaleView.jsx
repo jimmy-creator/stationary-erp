@@ -42,7 +42,7 @@ const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '-'
 
 // ─── Inline styles ────────────────────────────────────────────────────────────
-const GREEN = '#7ab800'
+const GREEN = '#4a90c4'
 const DARK = '#111111'
 const GRAY = '#444444'   // safe for print on both Mac & Windows
 const LIGHT_GRAY = '#666666' // for least-important secondary text

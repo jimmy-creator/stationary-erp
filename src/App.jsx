@@ -29,6 +29,7 @@ import { EmployeesList } from './pages/employees/EmployeesList'
 import { EmployeeForm } from './pages/employees/EmployeeForm'
 import { EmployeeView } from './pages/employees/EmployeeView'
 import { DailyCash } from './pages/DailyCash'
+import { CashAccounts } from './pages/CashAccounts'
 import { ProfitLoss } from './pages/ProfitLoss'
 import { StockValue } from './pages/StockValue'
 import { AccountsReceivable } from './pages/accounts-receivable/AccountsReceivable'
@@ -93,6 +94,7 @@ function App() {
             <Route path="/accounts-payable" element={<ProtectedModule moduleKey="accounts-payable"><AccountsPayable /></ProtectedModule>} />
             <Route path="/accounts-payable/:id/pay" element={<ProtectedModule moduleKey="accounts-payable"><MakePayment /></ProtectedModule>} />
             <Route path="/daily-cash" element={<ProtectedModule moduleKey="daily-cash"><DailyCash /></ProtectedModule>} />
+            <Route path="/cash-accounts" element={<ProtectedModule moduleKey="cash-accounts"><CashAccounts /></ProtectedModule>} />
 
             {/* Reports */}
             <Route path="/profit-loss" element={<ProtectedModule moduleKey="profit-loss"><ProfitLoss /></ProtectedModule>} />

@@ -17,6 +17,7 @@ import {
   Wallet,
   CreditCard,
   Calculator,
+  Banknote,
   FileBarChart,
   BarChart3,
   Settings,
@@ -66,6 +67,7 @@ export function Layout() {
         { to: '/accounts-receivable', label: 'Receivables', icon: Wallet, moduleKey: 'accounts-receivable' },
         { to: '/accounts-payable', label: 'Payables', icon: CreditCard, moduleKey: 'accounts-payable' },
         { to: '/daily-cash', label: 'Daily Cash', icon: Calculator, moduleKey: 'daily-cash' },
+        { to: '/cash-accounts', label: 'Cash Accounts', icon: Banknote, moduleKey: 'cash-accounts' },
       ],
     },
     {
