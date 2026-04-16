@@ -1,0 +1,61 @@
+name: Daily Database Backup → Google Drive
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # 2:00 AM UTC every day
+  workflow_dispatch:        # manual trigger from GitHub Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Install postgresql-client & rclone
+        run: |
+          sudo apt-get install -y postgresql-client
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone with Google service account
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" | base64 -d > /tmp/gdrive-sa.json
+          cat > ~/.config/rclone/rclone.conf <<'RCLONE_EOF'
+          [gdrive]
+          type = drive
+          service_account_file = /tmp/gdrive-sa.json
+          scope = drive
+          root_folder_id = ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          RCLONE_EOF
+
+      - name: Dump Supabase database
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
+          BACKUP_FILE="binthawar_${TIMESTAMP}.sql.gz"
+
+          pg_dump \
+            "postgresql://postgres.gfrkbcxeugwzbnieeezi:${PGPASSWORD}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres" \
+            --no-owner \
+            --no-acl \
+            --schema=public \
+            | gzip > "${BACKUP_FILE}"
+
+          SIZE=$(du -sh "${BACKUP_FILE}" | cut -f1)
+          echo "BACKUP_FILE=${BACKUP_FILE}" >> $GITHUB_ENV
+          echo "✅ Backup created: ${BACKUP_FILE} (${SIZE})"
+
+      - name: Upload to Google Drive
+        run: |
+          rclone copy "${{ env.BACKUP_FILE }}" gdrive: --drive-use-trash=false
+          echo "✅ Uploaded ${{ env.BACKUP_FILE }} to Google Drive"
+
+      - name: Keep only last 30 backups
+        run: |
+          # List all backup files sorted oldest-first, delete everything beyond the 30 newest
+          rclone lsf gdrive: --format "t;n" | sort | head -n -30 | while IFS=';' read -r ts name; do
+            echo "🗑 Deleting old backup: ${name}"
+            rclone delete "gdrive:${name}" --drive-use-trash=false
+          done
+          echo "✅ Cleanup done"
