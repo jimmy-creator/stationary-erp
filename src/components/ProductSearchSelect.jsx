@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
  * Replaces the native <select size=N> trick which only works reliably on Mac.
  * Type to filter, arrow keys to navigate, Enter/click to select.
  */
-export function ProductSearchSelect({ products, value, onChange, onConfirm, autoFocus, className }) {
+export function ProductSearchSelect({ products, value, onChange, onConfirm, autoFocus, showStock = true, className }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(0)
@@ -53,6 +53,8 @@ export function ProductSearchSelect({ products, value, onChange, onConfirm, auto
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const isDisabled = (p) => showStock && p.stock_quantity <= 0
+
   const selectProduct = (product) => {
     onChange(product.id)
     setQuery('')
@@ -88,7 +90,7 @@ export function ProductSearchSelect({ products, value, onChange, onConfirm, auto
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const product = filtered[highlightIndex]
-      if (product && product.stock_quantity > 0) selectProduct(product)
+      if (product && !isDisabled(product)) selectProduct(product)
     } else if (e.key === 'Escape') {
       setOpen(false)
       setQuery('')
@@ -118,33 +120,35 @@ export function ProductSearchSelect({ products, value, onChange, onConfirm, auto
       {open && (
         <ul
           ref={listRef}
-          className="absolute z-50 left-0 right-0 mt-1 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl max-h-56 overflow-y-auto"
+          className="product-search-dropdown absolute z-50 left-0 right-0 mt-1 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl max-h-56 overflow-y-auto"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-zinc-500">No products found</li>
+            <li className="px-3 py-2 text-sm text-zinc-400">No products found</li>
           ) : (
             filtered.map((p, i) => {
-              const outOfStock = p.stock_quantity <= 0
+              const disabled = isDisabled(p)
               return (
                 <li
                   key={p.id}
                   onMouseDown={(e) => {
                     e.preventDefault()  // prevent input blur before click fires
-                    if (!outOfStock) selectProduct(p)
+                    if (!disabled) selectProduct(p)
                   }}
                   onMouseEnter={() => setHighlightIndex(i)}
                   className={`px-3 py-2 text-sm cursor-pointer flex justify-between items-center gap-2 ${
-                    outOfStock
+                    disabled
                       ? 'text-zinc-600 cursor-not-allowed'
                       : i === highlightIndex
                         ? 'bg-teal-600/20 text-teal-200'
-                        : 'text-zinc-200 hover:bg-zinc-700'
+                        : 'text-zinc-200 hover:bg-zinc-700/60'
                   }`}
                 >
                   <span className="truncate">{p.name}</span>
-                  <span className={`text-xs shrink-0 ${outOfStock ? 'text-red-500' : 'text-zinc-500'}`}>
-                    {outOfStock ? 'OUT OF STOCK' : `${p.stock_quantity} ${p.unit}`}
-                  </span>
+                  {showStock && (
+                    <span className={`product-search-stock text-xs shrink-0 ${disabled ? 'text-red-500' : 'text-zinc-400'}`}>
+                      {disabled ? 'OUT OF STOCK' : `${p.stock_quantity} ${p.unit}`}
+                    </span>
+                  )}
                 </li>
               )
             })

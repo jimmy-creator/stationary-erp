@@ -136,6 +136,22 @@ html.light .border-cyan-800\/50 { border-color: rgba(6, 182, 212, 0.15) !importa
 html.light .border-purple-500\/30 { border-color: rgba(147, 51, 234, 0.25) !important; }
 html.light .border-emerald-500\/20 { border-color: rgba(16, 185, 129, 0.2) !important; }
 
+/* Product search dropdown - light mode */
+html.light .product-search-dropdown {
+  background-color: #ffffff !important;
+  border-color: #d1d5db !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+}
+html.light .product-search-dropdown li {
+  color: #111827 !important;
+}
+html.light .product-search-dropdown li:hover {
+  background-color: #f3f4f6 !important;
+}
+html.light .product-search-dropdown .product-search-stock {
+  color: #374151 !important;
+}
+
 /* Scrollbar - light */
 html.light ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.15);

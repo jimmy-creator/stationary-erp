@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { ProductSearchSelect } from '../../components/ProductSearchSelect'
 import { Plus, Trash2 } from 'lucide-react'
 
 export function PurchaseOrderForm() {
@@ -32,10 +33,11 @@ export function PurchaseOrderForm() {
   })
 
   const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit: 'Pcs', unit_price: 0, total_price: 0 }])
+  const [autoFocusIndex, setAutoFocusIndex] = useState(null)
 
   useEffect(() => {
     fetchData().then(() => {
-      if (!isEditing) focusLastProductSelect()
+      if (!isEditing) setAutoFocusIndex(0)
     })
     if (isEditing) fetchOrder()
   }, [id])
@@ -120,23 +122,20 @@ export function PurchaseOrderForm() {
     setItems(newItems)
   }
 
-  const focusLastProductSelect = () => {
-    setTimeout(() => {
-      const selects = document.querySelectorAll('[data-po-product-select]')
-      const last = selects[selects.length - 1]
-      if (last) {
-        last.focus()
-        last.size = last.options.length > 10 ? 10 : last.options.length
-        last.addEventListener('change', function handler() { last.size = 0; last.removeEventListener('change', handler) }, { once: true })
-        last.addEventListener('blur', function handler() { last.size = 0; last.removeEventListener('blur', handler) }, { once: true })
-      }
-    }, 50)
-  }
-
   const addItem = useCallback(() => {
-    setItems((prev) => [...prev, { product_id: '', product_name: '', quantity: 1, unit: 'Pcs', unit_price: 0, total_price: 0 }])
-    focusLastProductSelect()
+    setItems((prev) => {
+      const next = [...prev, { product_id: '', product_name: '', quantity: 1, unit: 'Pcs', unit_price: 0, total_price: 0 }]
+      setAutoFocusIndex(next.length - 1)
+      return next
+    })
   }, [])
+
+  const focusQty = (index) => {
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('[data-po-qty-input]')
+      if (inputs[index]) inputs[index].focus()
+    }, 30)
+  }
 
   const removeItem = (index) => { if (items.length > 1) setItems(items.filter((_, i) => i !== index)) }
 
@@ -151,14 +150,6 @@ export function PurchaseOrderForm() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [addItem])
-
-  const handleProductKeyDown = (e, index) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      const inputs = document.querySelectorAll('[data-po-qty-input]')
-      if (inputs[index]) inputs[index].focus()
-    }
-  }
 
   const handleQtyKeyDown = (e, index) => {
     if (e.key === 'Enter') {
@@ -348,10 +339,15 @@ export function PurchaseOrderForm() {
               <div key={index} className="grid grid-cols-12 gap-2 items-end bg-zinc-800/30 rounded-lg p-3">
                 <div className="col-span-12 md:col-span-4">
                   <label className="block text-xs text-zinc-400 mb-1">Product</label>
-                  <select data-po-product-select value={item.product_id} onChange={(e) => handleProductChange(index, e.target.value)} onKeyDown={(e) => handleProductKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
-                    <option value="">Select product</option>
-                    {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
+                  <ProductSearchSelect
+                    products={products}
+                    value={item.product_id}
+                    onChange={(productId) => handleProductChange(index, productId)}
+                    onConfirm={() => focusQty(index)}
+                    autoFocus={autoFocusIndex === index}
+                    showStock={false}
+                    className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
                 </div>
                 <div className="col-span-3 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Qty</label>
