@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { ProductSearchSelect } from '../../components/ProductSearchSelect'
 import { Plus, Trash2 } from 'lucide-react'
 
 export function SaleForm() {
@@ -33,11 +34,11 @@ export function SaleForm() {
 
   const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0 }])
   const [lastPrices, setLastPrices] = useState({}) // { product_id: last_unit_price }
+  const [autoFocusIndex, setAutoFocusIndex] = useState(null)
 
   useEffect(() => {
     fetchData().then(() => {
-      // Auto-focus first product select on new sale
-      if (!isEditing) focusLastProductSelect()
+      if (!isEditing) setAutoFocusIndex(0)
     })
     if (isEditing) fetchSale()
   }, [id])
@@ -171,29 +172,12 @@ export function SaleForm() {
     setItems(newItems)
   }
 
-  const focusLastProductSelect = () => {
-    setTimeout(() => {
-      const selects = document.querySelectorAll('[data-product-select]')
-      const last = selects[selects.length - 1]
-      if (last) {
-        last.focus()
-        // Open the dropdown by simulating a mousedown or using size trick
-        last.size = last.options.length > 10 ? 10 : last.options.length
-        last.addEventListener('change', function handler() {
-          last.size = 0
-          last.removeEventListener('change', handler)
-        }, { once: true })
-        last.addEventListener('blur', function handler() {
-          last.size = 0
-          last.removeEventListener('blur', handler)
-        }, { once: true })
-      }
-    }, 50)
-  }
-
   const addItem = useCallback(() => {
-    setItems((prev) => [...prev, { product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0 }])
-    focusLastProductSelect()
+    setItems((prev) => {
+      const next = [...prev, { product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0 }]
+      setAutoFocusIndex(next.length - 1)
+      return next
+    })
   }, [])
 
   const removeItem = (index) => {
@@ -213,13 +197,12 @@ export function SaleForm() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [addItem])
 
-  // Enter on product select → focus qty
-  const handleProductKeyDown = (e, index) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
+  // Focus qty for a given row (called by ProductSearchSelect after selection)
+  const focusQty = (index) => {
+    setTimeout(() => {
       const qtyInputs = document.querySelectorAll('[data-qty-input]')
       if (qtyInputs[index]) qtyInputs[index].focus()
-    }
+    }, 30)
   }
 
   // Enter on qty → focus price
@@ -238,7 +221,7 @@ export function SaleForm() {
         e.preventDefault()
         addItem()
       } else if (e.key === 'Enter') {
-        // Enter on non-last price → focus next product select
+        // Enter on non-last price → focus next product search input
         e.preventDefault()
         const selects = document.querySelectorAll('[data-product-select]')
         if (selects[index + 1]) selects[index + 1].focus()
@@ -441,10 +424,14 @@ export function SaleForm() {
               <div key={index} className="grid grid-cols-12 gap-2 items-end bg-zinc-800/30 rounded-lg p-3">
                 <div className="col-span-12 md:col-span-5">
                   <label className="block text-xs text-zinc-400 mb-1">Product</label>
-                  <select data-product-select value={item.product_id} onChange={(e) => handleProductChange(index, e.target.value)} onKeyDown={(e) => handleProductKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
-                    <option value="">Select product</option>
-                    {products.map((p) => <option key={p.id} value={p.id} disabled={p.stock_quantity <= 0}>{p.name} ({p.stock_quantity} {p.unit}){p.stock_quantity <= 0 ? ' - OUT OF STOCK' : ''}</option>)}
-                  </select>
+                  <ProductSearchSelect
+                    products={products}
+                    value={item.product_id}
+                    onChange={(productId) => handleProductChange(index, productId)}
+                    onConfirm={() => focusQty(index)}
+                    autoFocus={autoFocusIndex === index}
+                    className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
                 </div>
                 <div className="col-span-4 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Qty</label>
