@@ -52,8 +52,12 @@ export function CollectPayment() {
   const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
   const formatDate = (date) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
-  const totalCollected = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) + parseFloat(sale?.amount_paid || 0)
+  // amount_paid on the sales row is kept as the running total (initial + all AR collections)
+  const totalCollected = parseFloat(sale?.amount_paid || 0)
   const balance = parseFloat(sale?.grand_total || 0) - totalCollected
+  // Initial payment = running total minus everything recorded in sale_payments
+  const salePaymentsTotal = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
+  const initialPayment = Math.max(0, totalCollected - salePaymentsTotal)
 
   const handleCollect = async () => {
     if (!newPayment.amount || parseFloat(newPayment.amount) <= 0) {
@@ -84,14 +88,14 @@ export function CollectPayment() {
 
       if (paymentError) throw paymentError
 
-      // Update sale payment status
+      // Update sale amount_paid and payment status
       const newTotalPaid = totalCollected + parseFloat(newPayment.amount)
       const newBalance = parseFloat(sale.grand_total) - newTotalPaid
       const newStatus = newBalance <= 0.01 ? 'paid' : 'partial'
 
       const { error: saleError } = await supabase
         .from('sales')
-        .update({ payment_status: newStatus })
+        .update({ payment_status: newStatus, amount_paid: newTotalPaid })
         .eq('id', id)
 
       if (saleError) throw saleError
@@ -104,7 +108,7 @@ export function CollectPayment() {
 
       // Reset form and refresh
       setPayments([paymentData, ...payments])
-      setSale({ ...sale, payment_status: newStatus })
+      setSale({ ...sale, payment_status: newStatus, amount_paid: newTotalPaid })
       setNewPayment({
         payment_date: new Date().toISOString().split('T')[0],
         amount: '',
@@ -130,13 +134,13 @@ export function CollectPayment() {
       const updatedPayments = payments.filter((p) => p.id !== paymentId)
       setPayments(updatedPayments)
 
-      // Recalculate status
-      const newTotalPaid = updatedPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) + parseFloat(sale.amount_paid || 0)
+      // Deduct deleted payment from the running total
+      const newTotalPaid = Math.max(0, parseFloat(sale.amount_paid) - parseFloat(paymentAmount))
       const newBalance = parseFloat(sale.grand_total) - newTotalPaid
       const newStatus = newBalance <= 0.01 ? 'paid' : newTotalPaid > 0 ? 'partial' : 'unpaid'
 
-      await supabase.from('sales').update({ payment_status: newStatus }).eq('id', id)
-      setSale({ ...sale, payment_status: newStatus })
+      await supabase.from('sales').update({ payment_status: newStatus, amount_paid: newTotalPaid }).eq('id', id)
+      setSale({ ...sale, payment_status: newStatus, amount_paid: newTotalPaid })
     } catch (error) {
       console.error('Error deleting payment:', error)
       alert('Failed to delete payment')
@@ -168,7 +172,7 @@ export function CollectPayment() {
           </div>
           <div>
             <p className="text-xs text-zinc-500">Initial Payment</p>
-            <p className="text-lg font-bold text-zinc-300">{formatCurrency(sale.amount_paid)}</p>
+            <p className="text-lg font-bold text-zinc-300">{formatCurrency(initialPayment)}</p>
           </div>
           <div>
             <p className="text-xs text-zinc-500">Total Collected</p>
@@ -256,18 +260,18 @@ export function CollectPayment() {
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
         <h2 className="text-lg font-medium text-white mb-4">Payment History</h2>
 
-        {sale.amount_paid > 0 && (
+        {initialPayment > 0 && (
           <div className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3 mb-2">
             <div>
               <span className="text-sm text-zinc-400">{formatDate(sale.sale_date)}</span>
               <span className="ml-3 text-sm text-zinc-300">Initial payment at sale</span>
               <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-zinc-800 text-zinc-400">{sale.payment_method}</span>
             </div>
-            <span className="font-medium text-green-400">{formatCurrency(sale.amount_paid)}</span>
+            <span className="font-medium text-green-400">{formatCurrency(initialPayment)}</span>
           </div>
         )}
 
-        {payments.length === 0 && !sale.amount_paid ? (
+        {payments.length === 0 && initialPayment <= 0 ? (
           <p className="text-sm text-zinc-500 text-center py-4">No payments recorded yet</p>
         ) : (
           <div className="space-y-2">

@@ -32,6 +32,7 @@ import { DailyCash } from './pages/DailyCash'
 import { CashAccounts } from './pages/CashAccounts'
 import { ProfitLoss } from './pages/ProfitLoss'
 import { StockValue } from './pages/StockValue'
+import { Reconciliation } from './pages/Reconciliation'
 import { AccountsReceivable } from './pages/accounts-receivable/AccountsReceivable'
 import { CollectPayment } from './pages/accounts-receivable/CollectPayment'
 import { AccountsPayable } from './pages/accounts-payable/AccountsPayable'
@@ -99,6 +100,7 @@ function App() {
             {/* Reports */}
             <Route path="/profit-loss" element={<ProtectedModule moduleKey="profit-loss"><ProfitLoss /></ProtectedModule>} />
             <Route path="/stock-value" element={<ProtectedModule moduleKey="stock-value"><StockValue /></ProtectedModule>} />
+            <Route path="/reconciliation" element={<ProtectedModule moduleKey="reconciliation"><Reconciliation /></ProtectedModule>} />
 
             {/* People */}
             <Route path="/employees" element={<ProtectedModule moduleKey="employees"><EmployeesList /></ProtectedModule>} />

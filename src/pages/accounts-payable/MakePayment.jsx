@@ -51,8 +51,11 @@ export function MakePayment() {
   const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
   const formatDate = (date) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
-  const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) + parseFloat(order?.amount_paid || 0)
+  // amount_paid on the purchase_orders row is kept as the running total (initial + all AP payments)
+  const totalPaid = parseFloat(order?.amount_paid || 0)
   const balance = parseFloat(order?.grand_total || 0) - totalPaid
+  const poPaymentsTotal = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
+  const initialPayment = Math.max(0, totalPaid - poPaymentsTotal)
 
   const handlePay = async () => {
     if (!newPayment.amount || parseFloat(newPayment.amount) <= 0) {
@@ -87,7 +90,7 @@ export function MakePayment() {
 
       const { error: poError } = await supabase
         .from('purchase_orders')
-        .update({ payment_status: newStatus })
+        .update({ payment_status: newStatus, amount_paid: newTotalPaid })
         .eq('id', id)
 
       if (poError) throw poError
@@ -98,7 +101,7 @@ export function MakePayment() {
       }
 
       setPayments([paymentData, ...payments])
-      setOrder({ ...order, payment_status: newStatus })
+      setOrder({ ...order, payment_status: newStatus, amount_paid: newTotalPaid })
       setNewPayment({
         payment_date: new Date().toISOString().split('T')[0],
         amount: '',
@@ -120,15 +123,16 @@ export function MakePayment() {
       const { error } = await supabase.from('po_payments').delete().eq('id', paymentId)
       if (error) throw error
 
+      const deletedAmount = parseFloat(payments.find(p => p.id === paymentId)?.amount || 0)
       const updatedPayments = payments.filter((p) => p.id !== paymentId)
       setPayments(updatedPayments)
 
-      const newTotalPaid = updatedPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) + parseFloat(order.amount_paid || 0)
+      const newTotalPaid = Math.max(0, parseFloat(order.amount_paid) - deletedAmount)
       const newBalance = parseFloat(order.grand_total) - newTotalPaid
       const newStatus = newBalance <= 0.01 ? 'paid' : newTotalPaid > 0 ? 'partial' : 'unpaid'
 
-      await supabase.from('purchase_orders').update({ payment_status: newStatus }).eq('id', id)
-      setOrder({ ...order, payment_status: newStatus })
+      await supabase.from('purchase_orders').update({ payment_status: newStatus, amount_paid: newTotalPaid }).eq('id', id)
+      setOrder({ ...order, payment_status: newStatus, amount_paid: newTotalPaid })
     } catch (error) {
       console.error('Error:', error)
       alert('Failed to delete payment')
@@ -160,7 +164,7 @@ export function MakePayment() {
           </div>
           <div>
             <p className="text-xs text-zinc-500">Initial Payment</p>
-            <p className="text-lg font-bold text-zinc-300">{formatCurrency(order.amount_paid)}</p>
+            <p className="text-lg font-bold text-zinc-300">{formatCurrency(initialPayment)}</p>
           </div>
           <div>
             <p className="text-xs text-zinc-500">Total Paid</p>
@@ -240,17 +244,17 @@ export function MakePayment() {
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
         <h2 className="text-lg font-medium text-white mb-4">Payment History</h2>
 
-        {order.amount_paid > 0 && (
+        {initialPayment > 0 && (
           <div className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3 mb-2">
             <div>
               <span className="text-sm text-zinc-400">{formatDate(order.po_date)}</span>
               <span className="ml-3 text-sm text-zinc-300">Initial payment</span>
             </div>
-            <span className="font-medium text-green-400">{formatCurrency(order.amount_paid)}</span>
+            <span className="font-medium text-green-400">{formatCurrency(initialPayment)}</span>
           </div>
         )}
 
-        {payments.length === 0 && !order.amount_paid ? (
+        {payments.length === 0 && initialPayment <= 0 ? (
           <p className="text-sm text-zinc-500 text-center py-4">No payments recorded yet</p>
         ) : (
           <div className="space-y-2">
