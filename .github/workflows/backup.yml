@@ -16,17 +16,15 @@ jobs:
           sudo apt-get install -y postgresql-client
           curl https://rclone.org/install.sh | sudo bash
 
-      - name: Configure rclone with Google service account
+      - name: Configure rclone with OAuth token
         run: |
           mkdir -p ~/.config/rclone
-          echo "${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" | base64 -d > /tmp/gdrive-sa.json
-          cat > ~/.config/rclone/rclone.conf <<'RCLONE_EOF'
+          cat > ~/.config/rclone/rclone.conf << EOF
           [gdrive]
           type = drive
-          service_account_file = /tmp/gdrive-sa.json
-          scope = drive
+          token = ${{ secrets.RCLONE_GDRIVE_TOKEN }}
           root_folder_id = ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          RCLONE_EOF
+          EOF
 
       - name: Dump Supabase database
         env:
@@ -36,7 +34,7 @@ jobs:
           BACKUP_FILE="binthawar_${TIMESTAMP}.sql.gz"
 
           pg_dump \
-            "postgresql://postgres.gfrkbcxeugwzbnieeezi:${PGPASSWORD}@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres" \
+            "postgresql://postgres:${PGPASSWORD}@db.gfrkbcxeugwzbnieeezi.supabase.co:5432/postgres" \
             --no-owner \
             --no-acl \
             --schema=public \
@@ -53,7 +51,6 @@ jobs:
 
       - name: Keep only last 30 backups
         run: |
-          # List all backup files sorted oldest-first, delete everything beyond the 30 newest
           rclone lsf gdrive: --format "t;n" | sort | head -n -30 | while IFS=';' read -r ts name; do
             echo "🗑 Deleting old backup: ${name}"
             rclone delete "gdrive:${name}" --drive-use-trash=false
