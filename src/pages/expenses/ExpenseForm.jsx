@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 
 export function ExpenseForm() {
   const { id } = useParams()
@@ -12,9 +13,18 @@ export function ExpenseForm() {
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
+  // ── Inline add-category state ──────────────────────────────────────────────
+  const [addingCategory, setAddingCategory] = useState(false)
+  const [newCategoryLabel, setNewCategoryLabel] = useState('')
+  const [categoryError, setCategoryError] = useState('')
+  const [savingCategory, setSavingCategory] = useState(false)
+  const newCatInputRef = useRef(null)
+
+  const { categories, loading: catsLoading, addCategory } = useExpenseCategories()
+
   const [formData, setFormData] = useState({
     expense_date: new Date().toISOString().split('T')[0],
-    category: 'other',
+    category: '',
     description: '',
     amount: '',
     currency: 'QAR',
@@ -24,7 +34,21 @@ export function ExpenseForm() {
     notes: '',
   })
 
+  // Set default category once categories load (only for new expense)
+  useEffect(() => {
+    if (!isEditing && !formData.category && categories.length > 0) {
+      setFormData((prev) => ({ ...prev, category: categories[0].value }))
+    }
+  }, [categories, isEditing, formData.category])
+
   useEffect(() => { if (isEditing) fetchExpense() }, [id])
+
+  // Focus the new-category input when shown
+  useEffect(() => {
+    if (addingCategory) {
+      setTimeout(() => newCatInputRef.current?.focus(), 30)
+    }
+  }, [addingCategory])
 
   const fetchExpense = async () => {
     setLoading(true)
@@ -32,9 +56,15 @@ export function ExpenseForm() {
       const { data, error } = await supabase.from('expenses').select('*').eq('id', id).single()
       if (error) throw error
       setFormData({
-        expense_date: data.expense_date, category: data.category, description: data.description,
-        amount: data.amount, currency: data.currency || 'QAR', payment_method: data.payment_method || 'cash',
-        reference_number: data.reference_number || '', vendor: data.vendor || '', notes: data.notes || '',
+        expense_date: data.expense_date,
+        category: data.category,
+        description: data.description,
+        amount: data.amount,
+        currency: data.currency || 'QAR',
+        payment_method: data.payment_method || 'cash',
+        reference_number: data.reference_number || '',
+        vendor: data.vendor || '',
+        notes: data.notes || '',
       })
     } catch (error) {
       console.error('Error:', error)
@@ -48,9 +78,15 @@ export function ExpenseForm() {
     setSaving(true)
     try {
       const data = {
-        expense_date: formData.expense_date, category: formData.category, description: formData.description,
-        amount: parseFloat(formData.amount) || 0, currency: formData.currency, payment_method: formData.payment_method,
-        reference_number: formData.reference_number || null, vendor: formData.vendor || null, notes: formData.notes || null,
+        expense_date: formData.expense_date,
+        category: formData.category,
+        description: formData.description,
+        amount: parseFloat(formData.amount) || 0,
+        currency: formData.currency,
+        payment_method: formData.payment_method,
+        reference_number: formData.reference_number || null,
+        vendor: formData.vendor || null,
+        notes: formData.notes || null,
       }
       if (isEditing) {
         const { error } = await supabase.from('expenses').update(data).eq('id', id)
@@ -61,7 +97,8 @@ export function ExpenseForm() {
       }
       navigate('/expenses')
     } catch (error) {
-      console.error('Error:', error); alert('Failed to save expense')
+      console.error('Error:', error)
+      alert('Failed to save expense')
     } finally {
       setSaving(false)
     }
@@ -74,23 +111,40 @@ export function ExpenseForm() {
       if (error) throw error
       navigate('/expenses')
     } catch (error) {
-      console.error('Error:', error); alert('Failed to delete')
-    } finally { setDeleting(false); setShowDeleteModal(false) }
+      console.error('Error:', error)
+      alert('Failed to delete')
+    } finally {
+      setDeleting(false)
+      setShowDeleteModal(false)
+    }
   }
 
-  const categoryOptions = [
-    { value: 'rent', label: 'Rent' },
-    { value: 'utilities', label: 'Utilities' },
-    { value: 'salary', label: 'Salary' },
-    { value: 'inventory', label: 'Inventory Purchase' },
-    { value: 'maintenance', label: 'Maintenance' },
-    { value: 'marketing', label: 'Marketing' },
-    { value: 'transport', label: 'Transport' },
-    { value: 'office_supplies', label: 'Office Supplies' },
-    { value: 'other', label: 'Other' },
-  ]
+  const handleSaveNewCategory = async () => {
+    if (!newCategoryLabel.trim()) return
+    setSavingCategory(true)
+    setCategoryError('')
+    try {
+      const created = await addCategory(newCategoryLabel)
+      setFormData((prev) => ({ ...prev, category: created.value }))
+      setNewCategoryLabel('')
+      setAddingCategory(false)
+    } catch (err) {
+      setCategoryError(err.message || 'Failed to add category')
+    } finally {
+      setSavingCategory(false)
+    }
+  }
 
-  if (loading) return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
+  const handleNewCatKeyDown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); handleSaveNewCategory() }
+    if (e.key === 'Escape') { setAddingCategory(false); setNewCategoryLabel(''); setCategoryError('') }
+  }
+
+  if (loading || catsLoading) return (
+    <div className="flex justify-center py-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div>
+    </div>
+  )
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -111,7 +165,9 @@ export function ExpenseForm() {
         <Link to="/expenses" className="text-teal-600 hover:underline text-sm mb-2 inline-block">&larr; Back to list</Link>
         <div className="flex justify-between items-center">
           <h1 className="text-xl lg:text-2xl font-bold text-white">{isEditing ? 'Edit Expense' : 'Add Expense'}</h1>
-          {isEditing && <button type="button" onClick={() => setShowDeleteModal(true)} className="px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl hover:bg-red-500/20">Delete</button>}
+          {isEditing && (
+            <button type="button" onClick={() => setShowDeleteModal(true)} className="px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl hover:bg-red-500/20">Delete</button>
+          )}
         </div>
       </div>
 
@@ -120,25 +176,98 @@ export function ExpenseForm() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Date *</label>
-              <input type="date" required value={formData.expense_date} onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+              <input
+                type="date" required
+                value={formData.expense_date}
+                onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+              />
             </div>
+
+            {/* ── Category field ── */}
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Category *</label>
-              <select required value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
-                {categoryOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              {addingCategory ? (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      ref={newCatInputRef}
+                      type="text"
+                      value={newCategoryLabel}
+                      onChange={(e) => { setNewCategoryLabel(e.target.value); setCategoryError('') }}
+                      onKeyDown={handleNewCatKeyDown}
+                      placeholder="Category name…"
+                      className="flex-1 bg-zinc-800/50 border border-teal-600 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveNewCategory}
+                      disabled={savingCategory || !newCategoryLabel.trim()}
+                      className="px-3 py-2 text-sm bg-teal-600 text-white rounded-xl hover:bg-teal-500 disabled:opacity-50"
+                    >
+                      {savingCategory ? '…' : 'Add'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAddingCategory(false); setNewCategoryLabel(''); setCategoryError('') }}
+                      className="px-3 py-2 text-sm bg-zinc-700 text-zinc-300 rounded-xl hover:bg-zinc-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {categoryError && <p className="text-xs text-red-400">{categoryError}</p>}
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <select
+                    required
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    className="flex-1 bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    title="Add new category"
+                    onClick={() => setAddingCategory(true)}
+                    className="px-3 py-2 text-sm bg-zinc-700 text-zinc-300 rounded-xl hover:bg-zinc-600 border border-zinc-600"
+                  >
+                    + New
+                  </button>
+                </div>
+              )}
             </div>
+
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-zinc-300 mb-1">Description *</label>
-              <input type="text" required value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="What was this expense for?" className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+              <input
+                type="text" required
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="What was this expense for?"
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Amount (QAR) *</label>
-              <input type="number" required min="0" step="0.01" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} placeholder="0.00" className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+              <input
+                type="number" required min="0" step="0.01"
+                value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                placeholder="0.00"
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Payment Method</label>
-              <select value={formData.payment_method} onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
+              <select
+                value={formData.payment_method}
+                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+              >
                 <option value="cash">Cash</option>
                 <option value="bank_transfer">Bank Transfer</option>
                 <option value="credit_card">Credit Card</option>
@@ -147,22 +276,41 @@ export function ExpenseForm() {
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Vendor</label>
-              <input type="text" value={formData.vendor} onChange={(e) => setFormData({ ...formData, vendor: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+              <input
+                type="text"
+                value={formData.vendor}
+                onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Reference #</label>
-              <input type="text" value={formData.reference_number} onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+              <input
+                type="text"
+                value={formData.reference_number}
+                onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+              />
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-zinc-300 mb-1">Notes</label>
-              <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                rows={2}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+              />
             </div>
           </div>
         </div>
 
         <div className="flex flex-col sm:flex-row justify-end gap-3">
           <Link to="/expenses" className="w-full sm:w-auto text-center px-6 py-2 border border-zinc-700 rounded-xl text-zinc-300 hover:bg-zinc-800">Cancel</Link>
-          <button type="submit" disabled={saving} className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-500 hover:to-teal-400 disabled:opacity-50">
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full sm:w-auto px-6 py-2 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-xl hover:from-teal-500 hover:to-teal-400 disabled:opacity-50"
+          >
             {saving ? 'Saving...' : isEditing ? 'Update Expense' : 'Add Expense'}
           </button>
         </div>
