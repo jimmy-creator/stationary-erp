@@ -359,7 +359,7 @@ export function SaleView() {
                     {sale.discount_amount > 0 && (
                       <tr>
                         <td style={{ padding: '8px 10px', textAlign: 'left',  fontSize: '14px', color: GRAY, borderBottom: '1px solid #dddddd' }}>Discount</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontSize: '14px', color: '#cc0000', fontWeight: '700', borderBottom: '1px solid #dddddd' }}>
+                        <td className="inv-red" style={{ padding: '8px 10px', textAlign: 'right', fontSize: '14px', color: '#cc0000', fontWeight: '700', borderBottom: '1px solid #dddddd' }}>
                           -QR {parseFloat(sale.discount_amount || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -371,8 +371,8 @@ export function SaleView() {
                       </td>
                     </tr>
                     <tr>
-                      <td style={{ padding: '8px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '15px', backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderTop: '2px solid #aaaaaa' }}>Total</td>
-                      <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: '700', fontSize: '15px', backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderTop: '2px solid #aaaaaa' }}>
+                      <td style={{ padding: '8px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '15px', color: DARK, backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderTop: '2px solid #aaaaaa' }}>Total</td>
+                      <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: '700', fontSize: '15px', color: DARK, backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderTop: '2px solid #aaaaaa' }}>
                         QR {parseFloat(sale.grand_total || 0).toFixed(2)}
                       </td>
                     </tr>
@@ -385,8 +385,8 @@ export function SaleView() {
                           </td>
                         </tr>
                         <tr>
-                          <td style={{ padding: '6px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '13px', color: '#cc0000' }}>Balance Due</td>
-                          <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: '#cc0000' }}>
+                          <td className="inv-red" style={{ padding: '6px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '13px', color: '#cc0000' }}>Balance Due</td>
+                          <td className="inv-red" style={{ padding: '6px 8px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: '#cc0000' }}>
                             QR {parseFloat(balanceDue).toFixed(2)}
                           </td>
                         </tr>
