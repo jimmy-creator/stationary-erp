@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
  * Replaces the native <select size=N> trick which only works reliably on Mac.
  * Type to filter, arrow keys to navigate, Enter/click to select.
  */
-export function ProductSearchSelect({ products, value, onChange, onConfirm, autoFocus, showStock = true, className }) {
+export function ProductSearchSelect({ products, value, onChange, onConfirm, autoFocus, showStock = true, showCost = false, className }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(0)
@@ -144,11 +144,18 @@ export function ProductSearchSelect({ products, value, onChange, onConfirm, auto
                   }`}
                 >
                   <span className="truncate">{p.name}</span>
-                  {showStock && (
-                    <span className={`product-search-stock text-xs shrink-0 ${disabled ? 'text-red-500' : 'text-zinc-400'}`}>
-                      {disabled ? 'OUT OF STOCK' : `${p.stock_quantity} ${p.unit}`}
-                    </span>
-                  )}
+                  <span className="flex items-center gap-2 shrink-0">
+                    {showCost && p.cost_price != null && (
+                      <span className="product-search-cost text-xs text-zinc-500">
+                        Cost: QAR {parseFloat(p.cost_price).toFixed(2)}
+                      </span>
+                    )}
+                    {showStock && (
+                      <span className={`product-search-stock text-xs ${disabled ? 'text-red-500' : 'text-zinc-400'}`}>
+                        {disabled ? 'OUT OF STOCK' : `${p.stock_quantity} ${p.unit}`}
+                      </span>
+                    )}
+                  </span>
                 </li>
               )
             })

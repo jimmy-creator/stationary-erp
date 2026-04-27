@@ -46,7 +46,7 @@ export function SaleForm() {
   const fetchData = async () => {
     const [customersRes, productsRes, salespeopleRes] = await Promise.all([
       supabase.from('customers').select('id, name').eq('is_active', true).order('name'),
-      supabase.from('products').select('id, name, selling_price, stock_quantity, unit').eq('is_active', true).order('name'),
+      supabase.from('products').select('id, name, selling_price, cost_price, stock_quantity, unit').eq('is_active', true).order('name'),
       supabase.from('profiles').select('id, email').order('email'),
     ])
     setCustomers(customersRes.data || [])
@@ -430,6 +430,7 @@ export function SaleForm() {
                     onChange={(productId) => handleProductChange(index, productId)}
                     onConfirm={() => focusQty(index)}
                     autoFocus={autoFocusIndex === index}
+                    showCost
                     className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
