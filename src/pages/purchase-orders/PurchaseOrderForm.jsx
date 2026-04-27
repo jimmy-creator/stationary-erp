@@ -269,8 +269,8 @@ export function PurchaseOrderForm() {
         const wasNotReceived = previousStatus !== 'received'
 
         if (isNowReceived && wasNotReceived) {
-          // Calculate cargo share per item (proportional to item value)
           const poSubtotal = validItems.reduce((s, i) => s + i.total_price, 0)
+          const taxPct = parseFloat(formData.tax_percentage) || 0
           const poCargoCharges = parseFloat(formData.cargo_charges) || 0
 
           for (const item of validItems) {
@@ -285,13 +285,13 @@ export function PurchaseOrderForm() {
                 const prevStock = prod.stock_quantity || 0
                 const newStock = prevStock + item.quantity
 
-                // Calculate landed cost per unit (item cost + proportional cargo)
-                const cargoShare = poSubtotal > 0
-                  ? (item.total_price / poSubtotal) * poCargoCharges
-                  : 0
-                const landedCostPerUnit = item.unit_price + (cargoShare / item.quantity)
+                // Allocate PO-level tax and cargo proportionally to this line
+                const lineShare = poSubtotal > 0 ? item.total_price / poSubtotal : 0
+                const itemTax = item.total_price * taxPct / 100
+                const cargoShare = lineShare * poCargoCharges
+                const itemLandedTotal = item.total_price + itemTax + cargoShare
+                const landedCostPerUnit = itemLandedTotal / item.quantity
 
-                // Weighted average cost: blend existing stock cost with new landed cost
                 const existingCost = parseFloat(prod.cost_price) || 0
                 const weightedCost = prevStock > 0
                   ? ((existingCost * prevStock) + (landedCostPerUnit * item.quantity)) / newStock
@@ -309,7 +309,7 @@ export function PurchaseOrderForm() {
                   quantity: item.quantity,
                   previous_stock: prevStock,
                   new_stock: newStock,
-                  reason: `PO received: ${formData.supplier_name}` + (poCargoCharges > 0 ? ` (landed cost: ${newCostPrice})` : ''),
+                  reason: `PO received: ${formData.supplier_name} (landed cost: ${newCostPrice})`,
                   created_by_email: user?.email || null,
                 }).catch(() => {})
               }
