@@ -35,6 +35,15 @@ export function PurchaseOrderForm() {
   const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit: 'Pcs', unit_price: 0, total_price: 0 }])
   const [autoFocusIndex, setAutoFocusIndex] = useState(null)
 
+  const [payment, setPayment] = useState({
+    amount: '',
+    payment_date: new Date().toISOString().split('T')[0],
+    payment_method: 'bank_transfer',
+    reference: '',
+    notes: '',
+  })
+  const [existingPaid, setExistingPaid] = useState(0)
+
   useEffect(() => {
     fetchData().then(() => {
       if (!isEditing) setAutoFocusIndex(0)
@@ -76,6 +85,7 @@ export function PurchaseOrderForm() {
         status: order.status,
       })
       setPreviousStatus(order.status)
+      setExistingPaid(parseFloat(order.amount_paid || 0))
 
       if (itemsRes.data?.length) {
         setItems(itemsRes.data.map((item) => ({
@@ -184,6 +194,14 @@ export function PurchaseOrderForm() {
     const validItems = items.filter((item) => item.product_name && item.quantity > 0)
     if (validItems.length === 0) { alert('Please add at least one item'); return }
 
+    const paymentAmount = parseFloat(payment.amount) || 0
+    const balanceDue = grandTotal - existingPaid
+    if (paymentAmount < 0) { alert('Payment amount cannot be negative'); return }
+    if (paymentAmount > balanceDue + 0.01) {
+      alert(`Payment amount cannot exceed balance of QAR ${balanceDue.toFixed(2)}`)
+      return
+    }
+
     setSaving(true)
     try {
       const orderData = {
@@ -218,6 +236,32 @@ export function PurchaseOrderForm() {
 
       const { error: itemsError } = await supabase.from('purchase_order_items').insert(itemsData)
       if (itemsError) throw itemsError
+
+      // Record payment if entered — wrapped separately so it can't break the save
+      if (paymentAmount > 0) {
+        try {
+          const { error: payErr } = await supabase.from('po_payments').insert({
+            po_id: orderId,
+            payment_date: payment.payment_date,
+            amount: paymentAmount,
+            payment_method: payment.payment_method,
+            reference: payment.reference || null,
+            notes: payment.notes || null,
+          })
+          if (payErr) throw payErr
+
+          const newTotalPaid = existingPaid + paymentAmount
+          const newStatus = newTotalPaid >= grandTotal - 0.01 ? 'paid' : 'partial'
+          const { error: poUpdErr } = await supabase
+            .from('purchase_orders')
+            .update({ amount_paid: newTotalPaid, payment_status: newStatus })
+            .eq('id', orderId)
+          if (poUpdErr) throw poUpdErr
+        } catch (payError) {
+          console.error('Payment record error (PO saved successfully):', payError)
+          alert('Order saved but failed to record payment. Use the Make Payment page to record it.')
+        }
+      }
 
       // Update stock when status changes to "received" — wrapped separately so it can't break the save
       try {
@@ -399,6 +443,83 @@ export function PurchaseOrderForm() {
             </div>
           </div>
         </div>
+
+        {(() => {
+          const balanceDue = Math.max(0, grandTotal - existingPaid)
+          const enteredAmount = parseFloat(payment.amount) || 0
+          const remainingAfter = Math.max(0, balanceDue - enteredAmount)
+          const fullyPaid = balanceDue <= 0.01
+          return (
+            <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-medium text-white">Payment {isEditing ? '' : '(optional)'}</h2>
+                {isEditing && (
+                  <Link to={`/accounts-payable/${id}/pay`} className="text-sm text-teal-400 hover:text-teal-300">Manage payments &rarr;</Link>
+                )}
+              </div>
+
+              {isEditing && existingPaid > 0 && (
+                <div className="grid grid-cols-3 gap-3 mb-4 text-sm">
+                  <div className="bg-zinc-800/40 rounded-lg p-3">
+                    <p className="text-xs text-zinc-500">Already Paid</p>
+                    <p className="font-medium text-green-400">QAR {existingPaid.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-zinc-800/40 rounded-lg p-3">
+                    <p className="text-xs text-zinc-500">Order Total</p>
+                    <p className="font-medium text-zinc-200">QAR {grandTotal.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-zinc-800/40 rounded-lg p-3">
+                    <p className="text-xs text-zinc-500">Balance Due</p>
+                    <p className={`font-medium ${balanceDue > 0 ? 'text-red-400' : 'text-green-400'}`}>QAR {balanceDue.toFixed(2)}</p>
+                  </div>
+                </div>
+              )}
+
+              {fullyPaid ? (
+                <p className="text-sm text-green-400">Order is fully paid.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-1">Payment Date</label>
+                      <input type="date" value={payment.payment_date} onChange={(e) => setPayment({ ...payment, payment_date: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-1">Amount Paid (QAR)</label>
+                      <input type="number" min="0" step="0.01" max={balanceDue} value={payment.amount} onChange={(e) => setPayment({ ...payment, amount: e.target.value })} placeholder="0.00" className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-1">Method</label>
+                      <select value={payment.payment_method} onChange={(e) => setPayment({ ...payment, payment_method: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="cash">Cash</option>
+                        <option value="cheque">Cheque</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-1">Reference #</label>
+                      <input type="text" value={payment.reference} onChange={(e) => setPayment({ ...payment, reference: e.target.value })} placeholder="Transfer/Cheque #" className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-zinc-300 mb-1">Payment Notes</label>
+                      <input type="text" value={payment.notes} onChange={(e) => setPayment({ ...payment, notes: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mt-3 text-sm">
+                    <button type="button" onClick={() => setPayment({ ...payment, amount: balanceDue.toFixed(2) })} className="text-teal-400 hover:text-teal-300">
+                      Pay full balance (QAR {balanceDue.toFixed(2)})
+                    </button>
+                    {enteredAmount > 0 && (
+                      <span className="text-zinc-400">
+                        Remaining after payment: <span className={remainingAfter <= 0.01 ? 'text-green-400' : 'text-zinc-200'}>QAR {remainingAfter.toFixed(2)}</span>
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })()}
 
         <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
