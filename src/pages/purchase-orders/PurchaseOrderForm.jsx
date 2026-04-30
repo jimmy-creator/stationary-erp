@@ -13,7 +13,6 @@ export function PurchaseOrderForm() {
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [previousStatus, setPreviousStatus] = useState(null)
   const [suppliers, setSuppliers] = useState([])
   const [products, setProducts] = useState([])
 
@@ -84,13 +83,13 @@ export function PurchaseOrderForm() {
         notes: order.notes || '',
         status: order.status,
       })
-      setPreviousStatus(order.status)
       setExistingPaid(parseFloat(order.amount_paid || 0))
 
       if (itemsRes.data?.length) {
         setItems(itemsRes.data.map((item) => ({
           id: item.id, product_id: item.product_id || '', product_name: item.product_name,
           quantity: parseFloat(item.quantity) || 0, unit: item.unit || 'Pcs', unit_price: parseFloat(item.unit_price) || 0, total_price: parseFloat(item.total_price) || 0,
+          received_at: item.received_at || null,
         })))
       }
     } catch (error) {
@@ -222,20 +221,60 @@ export function PurchaseOrderForm() {
       if (isEditing) {
         const { error } = await supabase.from('purchase_orders').update(orderData).eq('id', id)
         if (error) throw error
-        await supabase.from('purchase_order_items').delete().eq('po_id', id)
       } else {
         const { data, error } = await supabase.from('purchase_orders').insert(orderData).select().single()
         if (error) throw error
         orderId = data.id
       }
 
-      const itemsData = validItems.map((item) => ({
-        po_id: orderId, product_id: item.product_id || null, product_name: item.product_name,
-        quantity: item.quantity, unit: item.unit, unit_price: item.unit_price, total_price: item.total_price,
-      }))
+      // Reconcile line items: keep existing rows (preserving received_at), update changed
+      // ones, insert new ones, and delete any the user removed. We rely on `received_at`
+      // to know whether a line has already had its stock applied, so we cannot wipe and
+      // re-insert.
+      const lineFields = (item) => ({
+        po_id: orderId,
+        product_id: item.product_id || null,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+      })
 
-      const { error: itemsError } = await supabase.from('purchase_order_items').insert(itemsData)
-      if (itemsError) throw itemsError
+      const keepIds = new Set(validItems.filter((i) => i.id).map((i) => i.id))
+      if (isEditing) {
+        const { data: existingRows, error: existingErr } = await supabase
+          .from('purchase_order_items')
+          .select('id')
+          .eq('po_id', orderId)
+        if (existingErr) throw existingErr
+        const toDelete = (existingRows || []).filter((r) => !keepIds.has(r.id)).map((r) => r.id)
+        if (toDelete.length) {
+          const { error: delErr } = await supabase
+            .from('purchase_order_items')
+            .delete()
+            .in('id', toDelete)
+          if (delErr) throw delErr
+        }
+        for (const item of validItems.filter((i) => i.id)) {
+          const { error: updErr } = await supabase
+            .from('purchase_order_items')
+            .update(lineFields(item))
+            .eq('id', item.id)
+          if (updErr) throw updErr
+        }
+      }
+
+      const newRows = validItems.filter((i) => !i.id).map(lineFields)
+      const insertedItems = []
+      if (newRows.length) {
+        const { data: insData, error: insErr } = await supabase
+          .from('purchase_order_items')
+          .insert(newRows)
+          .select('id, product_id, product_name, quantity, unit, unit_price, total_price')
+        if (insErr) throw insErr
+        insertedItems.push(...(insData || []))
+      }
 
       // Record payment if entered — wrapped separately so it can't break the save
       if (paymentAmount > 0) {
@@ -263,56 +302,81 @@ export function PurchaseOrderForm() {
         }
       }
 
-      // Update stock when status changes to "received" — wrapped separately so it can't break the save
+      // Update stock for any unreceived line whenever the PO is in 'received' status.
+      // Each line has its own `received_at` flag, so adding a new line to an already-
+      // received PO will bump stock for just that line. Wrapped so it can't break the save.
       try {
-        const isNowReceived = formData.status === 'received'
-        const wasNotReceived = previousStatus !== 'received'
+        if (formData.status === 'received') {
+          const linesToApply = [
+            ...validItems.filter((i) => i.id && !i.received_at),
+            ...insertedItems,
+          ]
+          if (linesToApply.length > 0) {
+            const poSubtotal = validItems.reduce((s, i) => s + (Number(i.total_price) || 0), 0)
+            const taxPct = parseFloat(formData.tax_percentage) || 0
+            const poCargoCharges = parseFloat(formData.cargo_charges) || 0
 
-        if (isNowReceived && wasNotReceived) {
-          const poSubtotal = validItems.reduce((s, i) => s + i.total_price, 0)
-          const taxPct = parseFloat(formData.tax_percentage) || 0
-          const poCargoCharges = parseFloat(formData.cargo_charges) || 0
+            const failures = []
+            const appliedIds = []
+            for (const item of linesToApply) {
+              if (!item.product_id) continue
+              try {
+                const { data: prod, error: fetchErr } = await supabase
+                  .from('products')
+                  .select('stock_quantity, cost_price')
+                  .eq('id', item.product_id)
+                  .single()
+                if (fetchErr) throw fetchErr
+                if (!prod) throw new Error('product not found')
 
-          for (const item of validItems) {
-            if (item.product_id) {
-              const { data: prod } = await supabase
-                .from('products')
-                .select('stock_quantity, cost_price')
-                .eq('id', item.product_id)
-                .single()
-
-              if (prod) {
+                const itemQty = Number(item.quantity) || 0
+                const itemTotal = Number(item.total_price) || 0
                 const prevStock = Number(prod.stock_quantity) || 0
-                const newStock = prevStock + item.quantity
+                const newStock = prevStock + itemQty
 
-                // Allocate PO-level tax and cargo proportionally to this line
-                const lineShare = poSubtotal > 0 ? item.total_price / poSubtotal : 0
-                const itemTax = item.total_price * taxPct / 100
+                const lineShare = poSubtotal > 0 ? itemTotal / poSubtotal : 0
+                const itemTax = itemTotal * taxPct / 100
                 const cargoShare = lineShare * poCargoCharges
-                const itemLandedTotal = item.total_price + itemTax + cargoShare
-                const landedCostPerUnit = itemLandedTotal / item.quantity
+                const itemLandedTotal = itemTotal + itemTax + cargoShare
+                const landedCostPerUnit = itemQty > 0 ? itemLandedTotal / itemQty : 0
 
                 const existingCost = parseFloat(prod.cost_price) || 0
-                const weightedCost = prevStock > 0
-                  ? ((existingCost * prevStock) + (landedCostPerUnit * item.quantity)) / newStock
+                const weightedCostRaw = prevStock > 0
+                  ? ((existingCost * prevStock) + (landedCostPerUnit * itemQty)) / newStock
                   : landedCostPerUnit
+                const weightedCost = Number.isFinite(weightedCostRaw) ? weightedCostRaw : 0
                 const newCostPrice = Math.round(weightedCost * 100) / 100
 
-                await supabase
+                const { error: updErr } = await supabase
                   .from('products')
                   .update({ stock_quantity: newStock, cost_price: newCostPrice })
                   .eq('id', item.product_id)
+                if (updErr) throw updErr
 
                 await supabase.from('stock_adjustments').insert({
                   product_id: item.product_id,
                   adjustment_type: 'add',
-                  quantity: item.quantity,
+                  quantity: itemQty,
                   previous_stock: prevStock,
                   new_stock: newStock,
                   reason: `PO received: ${formData.supplier_name} (landed cost: ${newCostPrice})`,
                   created_by_email: user?.email || null,
                 }).catch(() => {})
+
+                appliedIds.push(item.id)
+              } catch (itemErr) {
+                console.error(`Stock update failed for "${item.product_name}":`, itemErr)
+                failures.push(item.product_name)
               }
+            }
+            if (appliedIds.length) {
+              await supabase
+                .from('purchase_order_items')
+                .update({ received_at: new Date().toISOString() })
+                .in('id', appliedIds)
+            }
+            if (failures.length) {
+              alert(`Stock could not be updated for: ${failures.join(', ')}. Check the console for details.`)
             }
           }
         }
