@@ -90,7 +90,7 @@ export function PurchaseOrderForm() {
       if (itemsRes.data?.length) {
         setItems(itemsRes.data.map((item) => ({
           id: item.id, product_id: item.product_id || '', product_name: item.product_name,
-          quantity: item.quantity, unit: item.unit || 'Pcs', unit_price: item.unit_price, total_price: item.total_price,
+          quantity: parseFloat(item.quantity) || 0, unit: item.unit || 'Pcs', unit_price: parseFloat(item.unit_price) || 0, total_price: parseFloat(item.total_price) || 0,
         })))
       }
     } catch (error) {
@@ -127,7 +127,7 @@ export function PurchaseOrderForm() {
 
   const handleItemChange = (index, field, value) => {
     const newItems = [...items]
-    newItems[index][field] = field === 'quantity' ? (parseInt(value) || 0) : (parseFloat(value) || 0)
+    newItems[index][field] = parseFloat(value) || 0
     newItems[index].total_price = newItems[index].unit_price * newItems[index].quantity
     setItems(newItems)
   }
@@ -282,7 +282,7 @@ export function PurchaseOrderForm() {
                 .single()
 
               if (prod) {
-                const prevStock = prod.stock_quantity || 0
+                const prevStock = Number(prod.stock_quantity) || 0
                 const newStock = prevStock + item.quantity
 
                 // Allocate PO-level tax and cargo proportionally to this line
@@ -395,7 +395,7 @@ export function PurchaseOrderForm() {
                 </div>
                 <div className="col-span-3 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Qty</label>
-                  <input data-po-qty-input type="number" min="1" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} onKeyDown={(e) => handleQtyKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  <input data-po-qty-input type="number" min="0" step="any" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} onKeyDown={(e) => handleQtyKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div className="col-span-3 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Unit Price</label>

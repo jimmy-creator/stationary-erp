@@ -37,14 +37,18 @@ export function StockValue() {
 
       if (productsRes.error) throw productsRes.error
 
-      const enriched = (productsRes.data || []).map((p) => ({
-        ...p,
-        cost_value: (parseFloat(p.cost_price) || 0) * (p.stock_quantity || 0),
-        retail_value: (parseFloat(p.selling_price) || 0) * (p.stock_quantity || 0),
-        potential_profit: ((parseFloat(p.selling_price) || 0) - (parseFloat(p.cost_price) || 0)) * (p.stock_quantity || 0),
-        is_low: p.stock_quantity > 0 && p.stock_quantity <= p.reorder_level,
-        is_out: p.stock_quantity <= 0,
-      }))
+      const enriched = (productsRes.data || []).map((p) => {
+        const stockQty = Number(p.stock_quantity) || 0
+        return {
+          ...p,
+          stock_quantity: stockQty,
+          cost_value: (parseFloat(p.cost_price) || 0) * stockQty,
+          retail_value: (parseFloat(p.selling_price) || 0) * stockQty,
+          potential_profit: ((parseFloat(p.selling_price) || 0) - (parseFloat(p.cost_price) || 0)) * stockQty,
+          is_low: stockQty > 0 && stockQty <= p.reorder_level,
+          is_out: stockQty <= 0,
+        }
+      })
 
       setProducts(enriched)
       setCategories(categoriesRes.data || [])

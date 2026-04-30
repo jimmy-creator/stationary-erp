@@ -63,13 +63,13 @@ export function ProductView() {
   }
 
   const handleStockAdjust = async () => {
-    const qty = parseInt(adjustForm.quantity)
+    const qty = parseFloat(adjustForm.quantity)
     if (!qty || qty <= 0) {
       alert('Please enter a valid quantity')
       return
     }
 
-    const currentStock = product.stock_quantity || 0
+    const currentStock = Number(product.stock_quantity) || 0
     let newStock
 
     if (adjustForm.type === 'add') {
@@ -279,6 +279,7 @@ export function ProductView() {
               <input
                 type="number"
                 min="0"
+                step="any"
                 value={adjustForm.quantity}
                 onChange={(e) => setAdjustForm({ ...adjustForm, quantity: e.target.value })}
                 placeholder={adjustForm.type === 'set' ? 'Set stock to...' : 'Enter qty'}
@@ -308,9 +309,9 @@ export function ProductView() {
         </div>
         {adjustForm.quantity && (
           <p className="text-sm text-zinc-500 mt-2">
-            {adjustForm.type === 'add' && `Stock will change: ${product.stock_quantity} → ${product.stock_quantity + parseInt(adjustForm.quantity || 0)}`}
-            {adjustForm.type === 'remove' && `Stock will change: ${product.stock_quantity} → ${Math.max(0, product.stock_quantity - parseInt(adjustForm.quantity || 0))}`}
-            {adjustForm.type === 'set' && `Stock will change: ${product.stock_quantity} → ${parseInt(adjustForm.quantity || 0)}`}
+            {adjustForm.type === 'add' && `Stock will change: ${product.stock_quantity} → ${Number(product.stock_quantity) + (parseFloat(adjustForm.quantity) || 0)}`}
+            {adjustForm.type === 'remove' && `Stock will change: ${product.stock_quantity} → ${Math.max(0, Number(product.stock_quantity) - (parseFloat(adjustForm.quantity) || 0))}`}
+            {adjustForm.type === 'set' && `Stock will change: ${product.stock_quantity} → ${parseFloat(adjustForm.quantity) || 0}`}
           </p>
         )}
       </div>

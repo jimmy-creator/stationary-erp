@@ -216,7 +216,7 @@ export function ProductForm() {
           : null,
         cost_price: parseFloat(formData.cost_price) || 0,
         selling_price: parseFloat(formData.selling_price) || 0,
-        stock_quantity: parseInt(formData.stock_quantity) || 0,
+        stock_quantity: parseFloat(formData.stock_quantity) || 0,
         reorder_level: parseInt(formData.reorder_level) || 5,
         barcode: formData.barcode || null,
         is_active: formData.is_active,
@@ -472,6 +472,7 @@ export function ProductForm() {
               <input
                 type="number"
                 min="0"
+                step="any"
                 value={formData.stock_quantity}
                 onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
                 className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"

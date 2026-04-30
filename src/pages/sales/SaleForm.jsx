@@ -85,9 +85,9 @@ export function SaleForm() {
           id: item.id,
           product_id: item.product_id || '',
           product_name: item.product_name,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
+          quantity: parseFloat(item.quantity) || 0,
+          unit_price: parseFloat(item.unit_price) || 0,
+          total_price: parseFloat(item.total_price) || 0,
         })))
       }
     } catch (error) {
@@ -160,7 +160,7 @@ export function SaleForm() {
 
   const handleQuantityChange = (index, quantity) => {
     const newItems = [...items]
-    newItems[index].quantity = parseInt(quantity) || 0
+    newItems[index].quantity = parseFloat(quantity) || 0
     newItems[index].total_price = newItems[index].unit_price * newItems[index].quantity
     setItems(newItems)
   }
@@ -338,7 +338,7 @@ export function SaleForm() {
             if (product) {
               await supabase
                 .from('products')
-                .update({ stock_quantity: Math.max(0, product.stock_quantity - item.quantity) })
+                .update({ stock_quantity: Math.max(0, (Number(product.stock_quantity) || 0) - item.quantity) })
                 .eq('id', item.product_id)
             }
           }
@@ -436,7 +436,7 @@ export function SaleForm() {
                 </div>
                 <div className="col-span-4 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Qty</label>
-                  <input data-qty-input type="number" min="1" value={item.quantity} onChange={(e) => handleQuantityChange(index, e.target.value)} onKeyDown={(e) => handleQtyKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  <input data-qty-input type="number" min="0" step="any" value={item.quantity} onChange={(e) => handleQuantityChange(index, e.target.value)} onKeyDown={(e) => handleQtyKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                 </div>
                 <div className="col-span-4 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Price</label>
