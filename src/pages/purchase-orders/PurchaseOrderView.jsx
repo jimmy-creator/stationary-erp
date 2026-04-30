@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { useStoreSettings } from '../../hooks/useStoreSettings'
 
 export function PurchaseOrderView() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const { settings: store } = useStoreSettings()
   const [order, setOrder] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [reapplyItem, setReapplyItem] = useState(null)
+  const [reapplying, setReapplying] = useState(false)
+  const [stockLogCounts, setStockLogCounts] = useState({})
+  const [appliedThisSession, setAppliedThisSession] = useState(() => new Set())
 
   useEffect(() => { fetchOrder() }, [id])
 
@@ -24,10 +30,112 @@ export function PurchaseOrderView() {
       if (orderRes.error) throw orderRes.error
       setOrder(orderRes.data)
       setItems(itemsRes.data || [])
+
+      const productIds = (itemsRes.data || [])
+        .map((it) => it.product_id)
+        .filter(Boolean)
+      if (productIds.length) {
+        try {
+          const { data: logs } = await supabase
+            .from('stock_adjustments')
+            .select('product_id, reason')
+            .in('product_id', productIds)
+          const counts = {}
+          for (const log of logs || []) {
+            const reason = log.reason || ''
+            if (reason.startsWith('PO received:') || reason.startsWith('PO re-applied:')) {
+              counts[log.product_id] = (counts[log.product_id] || 0) + 1
+            }
+          }
+          setStockLogCounts(counts)
+        } catch {
+          // stock_adjustments may not exist; silently skip the count display
+        }
+      }
     } catch (error) {
       console.error('Error fetching purchase order:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleReapply = async () => {
+    if (!reapplyItem || !order) return
+    setReapplying(true)
+    try {
+      if (!reapplyItem.product_id) throw new Error('Line has no linked product')
+
+      const { data: prod, error: fetchErr } = await supabase
+        .from('products')
+        .select('stock_quantity, cost_price')
+        .eq('id', reapplyItem.product_id)
+        .single()
+      if (fetchErr) throw fetchErr
+      if (!prod) throw new Error('Product not found')
+
+      const itemQty = Number(reapplyItem.quantity) || 0
+      const itemTotal = Number(reapplyItem.total_price) || 0
+      const prevStock = Number(prod.stock_quantity) || 0
+      const newStock = prevStock + itemQty
+
+      const poSubtotal = items.reduce((s, i) => s + (Number(i.total_price) || 0), 0)
+      const taxPct = parseFloat(order.tax_percentage) || 0
+      const poCargoCharges = parseFloat(order.cargo_charges) || 0
+      const lineShare = poSubtotal > 0 ? itemTotal / poSubtotal : 0
+      const itemTax = itemTotal * taxPct / 100
+      const cargoShare = lineShare * poCargoCharges
+      const itemLandedTotal = itemTotal + itemTax + cargoShare
+      const landedCostPerUnit = itemQty > 0 ? itemLandedTotal / itemQty : 0
+
+      const existingCost = parseFloat(prod.cost_price) || 0
+      const weightedCostRaw = prevStock > 0
+        ? ((existingCost * prevStock) + (landedCostPerUnit * itemQty)) / newStock
+        : landedCostPerUnit
+      const weightedCost = Number.isFinite(weightedCostRaw) ? weightedCostRaw : 0
+      const newCostPrice = Math.round(weightedCost * 100) / 100
+
+      const { error: updErr } = await supabase
+        .from('products')
+        .update({ stock_quantity: newStock, cost_price: newCostPrice })
+        .eq('id', reapplyItem.product_id)
+      if (updErr) throw updErr
+
+      try {
+        await supabase.from('stock_adjustments').insert({
+          product_id: reapplyItem.product_id,
+          adjustment_type: 'add',
+          quantity: itemQty,
+          previous_stock: prevStock,
+          new_stock: newStock,
+          reason: `PO re-applied: ${order.supplier_name} (landed cost: ${newCostPrice})`,
+          created_by_email: user?.email || null,
+        })
+      } catch (logErr) {
+        console.warn('stock_adjustments log failed (non-fatal):', logErr)
+      }
+
+      const nowIso = new Date().toISOString()
+      await supabase
+        .from('purchase_order_items')
+        .update({ received_at: nowIso })
+        .eq('id', reapplyItem.id)
+
+      setItems((prev) => prev.map((it) => (it.id === reapplyItem.id ? { ...it, received_at: nowIso } : it)))
+      setStockLogCounts((prev) => ({
+        ...prev,
+        [reapplyItem.product_id]: (prev[reapplyItem.product_id] || 0) + 1,
+      }))
+      setAppliedThisSession((prev) => {
+        const next = new Set(prev)
+        next.add(reapplyItem.id)
+        return next
+      })
+      setReapplyItem(null)
+    } catch (error) {
+      console.error('Re-apply failed:', error)
+      alert(`Re-apply failed: ${error.message || error}`)
+    } finally {
+      setReapplying(false)
     }
   }
 
@@ -59,6 +167,29 @@ export function PurchaseOrderView() {
 
   return (
     <div className="max-w-4xl mx-auto print-area">
+      {reapplyItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-medium text-zinc-200 mb-2">Re-apply Stock</h3>
+            <p className="text-zinc-400 mb-2">
+              This will add <strong className="text-zinc-200">{reapplyItem.quantity} {reapplyItem.unit}</strong> of <strong className="text-zinc-200">{reapplyItem.product_name}</strong> to stock and update its landed cost.
+            </p>
+            {reapplyItem.product_id && (
+              <p className={`text-sm mb-2 ${stockLogCounts[reapplyItem.product_id] ? 'text-red-400' : 'text-zinc-500'}`}>
+                {stockLogCounts[reapplyItem.product_id]
+                  ? `⚠ Found ${stockLogCounts[reapplyItem.product_id]} prior PO stock-adjustment log${stockLogCounts[reapplyItem.product_id] > 1 ? 's' : ''} for this product. This line may already have been applied.`
+                  : 'No prior PO stock-adjustment logs found for this product — likely was missed.'}
+              </p>
+            )}
+            <p className="text-amber-400 text-sm mb-6">Use this only if the line was missed when the PO was first received. Running it again will double-count.</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setReapplyItem(null)} disabled={reapplying} className="px-4 py-2 text-zinc-300 bg-zinc-800 border border-zinc-700 rounded-md hover:bg-zinc-700">Cancel</button>
+              <button onClick={handleReapply} disabled={reapplying} className="px-4 py-2 text-white bg-teal-600 rounded-md hover:bg-teal-700 disabled:opacity-50">{reapplying ? 'Applying...' : 'Re-apply'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg max-w-md w-full p-6">
@@ -124,6 +255,7 @@ export function PurchaseOrderView() {
                   <th className="px-4 py-2 text-center text-xs font-medium text-zinc-500 uppercase">Qty</th>
                   <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Unit Price</th>
                   <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase">Total</th>
+                  {order.status === 'received' && <th className="px-4 py-2 text-right text-xs font-medium text-zinc-500 uppercase print-hide">Stock</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -134,6 +266,31 @@ export function PurchaseOrderView() {
                     <td className="px-4 py-3 text-sm text-zinc-400 text-center">{item.quantity} {item.unit}</td>
                     <td className="px-4 py-3 text-sm text-zinc-400 text-right">{formatCurrency(item.unit_price)}</td>
                     <td className="px-4 py-3 text-sm font-medium text-zinc-200 text-right">{formatCurrency(item.total_price)}</td>
+                    {order.status === 'received' && (
+                      <td className="px-4 py-3 text-right print-hide">
+                        {appliedThisSession.has(item.id) ? (
+                          <span className="text-xs text-green-400">✓ Just applied</span>
+                        ) : item.received_at ? (
+                          <div className="flex flex-col items-end gap-1">
+                            <button
+                              onClick={() => setReapplyItem(item)}
+                              disabled={!item.product_id}
+                              className="text-xs text-amber-400 hover:text-amber-300 disabled:text-zinc-600 disabled:cursor-not-allowed"
+                              title={item.product_id ? 'Re-apply stock for this line' : 'Line has no linked product'}
+                            >
+                              Re-apply
+                            </button>
+                            {item.product_id && (
+                              <span className={`text-[10px] ${stockLogCounts[item.product_id] ? 'text-green-500' : 'text-amber-500'}`}>
+                                {stockLogCounts[item.product_id] ? `✓ ${stockLogCounts[item.product_id]} log${stockLogCounts[item.product_id] > 1 ? 's' : ''}` : '⚠ no log'}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-zinc-500">Pending</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -141,10 +298,30 @@ export function PurchaseOrderView() {
           </div>
 
           <div className="md:hidden space-y-3">
-            {items.map((item, i) => (
+            {items.map((item) => (
               <div key={item.id} className="bg-zinc-800/30 rounded-lg p-3">
                 <div className="flex justify-between"><span className="text-sm text-zinc-200">{item.product_name}</span><span className="font-medium text-zinc-200">{formatCurrency(item.total_price)}</span></div>
                 <p className="text-xs text-zinc-500">{item.quantity} {item.unit} x {formatCurrency(item.unit_price)}</p>
+                {order.status === 'received' && (
+                  <div className="mt-2 print-hide flex items-center gap-2">
+                    {appliedThisSession.has(item.id) ? (
+                      <span className="text-xs text-green-400">✓ Just applied</span>
+                    ) : item.received_at ? (
+                      <>
+                        <button onClick={() => setReapplyItem(item)} disabled={!item.product_id} className="text-xs text-amber-400 hover:text-amber-300 disabled:text-zinc-600 disabled:cursor-not-allowed">
+                          Re-apply stock
+                        </button>
+                        {item.product_id && (
+                          <span className={`text-[10px] ${stockLogCounts[item.product_id] ? 'text-green-500' : 'text-amber-500'}`}>
+                            {stockLogCounts[item.product_id] ? `✓ ${stockLogCounts[item.product_id]} log${stockLogCounts[item.product_id] > 1 ? 's' : ''}` : '⚠ no log'}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-xs text-zinc-500">Stock pending — save the PO to apply</span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

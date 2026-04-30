@@ -353,15 +353,19 @@ export function PurchaseOrderForm() {
                   .eq('id', item.product_id)
                 if (updErr) throw updErr
 
-                await supabase.from('stock_adjustments').insert({
-                  product_id: item.product_id,
-                  adjustment_type: 'add',
-                  quantity: itemQty,
-                  previous_stock: prevStock,
-                  new_stock: newStock,
-                  reason: `PO received: ${formData.supplier_name} (landed cost: ${newCostPrice})`,
-                  created_by_email: user?.email || null,
-                }).catch(() => {})
+                try {
+                  await supabase.from('stock_adjustments').insert({
+                    product_id: item.product_id,
+                    adjustment_type: 'add',
+                    quantity: itemQty,
+                    previous_stock: prevStock,
+                    new_stock: newStock,
+                    reason: `PO received: ${formData.supplier_name} (landed cost: ${newCostPrice})`,
+                    created_by_email: user?.email || null,
+                  })
+                } catch (logErr) {
+                  console.warn('stock_adjustments log failed (non-fatal):', logErr)
+                }
 
                 appliedIds.push(item.id)
               } catch (itemErr) {
