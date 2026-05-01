@@ -151,8 +151,58 @@ export function PurchaseOrderView() {
   const handleDelete = async () => {
     setDeleting(true)
     try {
+      // Revert any stock + cost that was applied by this PO's lines, before the
+      // cascade-delete removes them and we lose the applied_quantity record.
+      const { data: lines } = await supabase
+        .from('purchase_order_items')
+        .select('product_id, applied_quantity, applied_landed_cost')
+        .eq('po_id', id)
+      const failures = []
+      for (const line of lines || []) {
+        const appliedQty = Number(line.applied_quantity) || 0
+        if (!line.product_id || appliedQty <= 0) continue
+        const appliedCost = Number(line.applied_landed_cost) || 0
+        try {
+          const { data: prod, error: prodErr } = await supabase
+            .from('products')
+            .select('stock_quantity, cost_price')
+            .eq('id', line.product_id)
+            .single()
+          if (prodErr) throw prodErr
+          const prevStock = Number(prod?.stock_quantity) || 0
+          const prevCost = Number(prod?.cost_price) || 0
+          const newStock = Math.max(0, prevStock - appliedQty)
+          const newValue = Math.max(0, prevStock * prevCost - appliedQty * appliedCost)
+          const newCost = newStock > 0 ? Math.round((newValue / newStock) * 100) / 100 : 0
+          const { error: updErr } = await supabase
+            .from('products')
+            .update({ stock_quantity: newStock, cost_price: newCost })
+            .eq('id', line.product_id)
+          if (updErr) throw updErr
+          try {
+            await supabase.from('stock_adjustments').insert({
+              product_id: line.product_id,
+              adjustment_type: 'remove',
+              quantity: appliedQty,
+              previous_stock: prevStock,
+              new_stock: newStock,
+              reason: `PO deleted: ${order?.supplier_name || ''}`,
+              created_by_email: user?.email || null,
+            })
+          } catch (logErr) {
+            console.warn('stock_adjustments log failed (non-fatal):', logErr)
+          }
+        } catch (err) {
+          console.error(`Stock revert failed for product ${line.product_id}:`, err)
+          failures.push(line.product_id)
+        }
+      }
+
       const { error } = await supabase.from('purchase_orders').delete().eq('id', id)
       if (error) throw error
+      if (failures.length) {
+        alert(`PO deleted, but stock revert failed for ${failures.length} product(s). Check the console.`)
+      }
       navigate('/purchase-orders')
     } catch (error) {
       console.error('Error deleting:', error)

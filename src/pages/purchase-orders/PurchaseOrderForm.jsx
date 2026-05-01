@@ -13,6 +13,7 @@ export function PurchaseOrderForm() {
 
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [previousStatus, setPreviousStatus] = useState(null)
   const [suppliers, setSuppliers] = useState([])
   const [products, setProducts] = useState([])
 
@@ -84,6 +85,7 @@ export function PurchaseOrderForm() {
         status: order.status,
       })
       setExistingPaid(parseFloat(order.amount_paid || 0))
+      setPreviousStatus(order.status)
 
       if (itemsRes.data?.length) {
         setItems(itemsRes.data.map((item) => ({
@@ -396,6 +398,34 @@ export function PurchaseOrderForm() {
           } catch (err) {
             console.error('Revert failed for deleted line:', err)
             failures.push('(deleted line)')
+          }
+        }
+
+        // Status transition: received → not-received reverts every surviving line so
+        // the PO no longer contributes to stock. Re-flipping back to received will
+        // re-apply from scratch.
+        if (previousStatus === 'received' && formData.status !== 'received') {
+          for (const item of validItems.filter((i) => i.id)) {
+            const prev = prevById.get(item.id)
+            if (!prev || !prev.product_id) continue
+            const appliedQty = Number(prev.applied_quantity) || 0
+            const appliedCost = Number(prev.applied_landed_cost) || 0
+            if (appliedQty <= 0) continue
+            try {
+              await applyDelta(
+                prev.product_id,
+                -appliedQty,
+                -(appliedQty * appliedCost),
+                `PO status changed from received: ${formData.supplier_name}`
+              )
+              await supabase
+                .from('purchase_order_items')
+                .update({ applied_quantity: 0, applied_landed_cost: 0 })
+                .eq('id', item.id)
+            } catch (err) {
+              console.error('Status-revert failed for line:', err)
+              failures.push(item.product_name)
+            }
           }
         }
 
