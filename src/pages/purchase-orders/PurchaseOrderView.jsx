@@ -117,10 +117,19 @@ export function PurchaseOrderView() {
       const nowIso = new Date().toISOString()
       await supabase
         .from('purchase_order_items')
-        .update({ received_at: nowIso })
+        .update({
+          received_at: nowIso,
+          applied_quantity: itemQty,
+          applied_landed_cost: landedCostPerUnit,
+        })
         .eq('id', reapplyItem.id)
 
-      setItems((prev) => prev.map((it) => (it.id === reapplyItem.id ? { ...it, received_at: nowIso } : it)))
+      setItems((prev) => prev.map((it) => (it.id === reapplyItem.id ? {
+        ...it,
+        received_at: nowIso,
+        applied_quantity: itemQty,
+        applied_landed_cost: landedCostPerUnit,
+      } : it)))
       setStockLogCounts((prev) => ({
         ...prev,
         [reapplyItem.product_id]: (prev[reapplyItem.product_id] || 0) + 1,
@@ -270,7 +279,7 @@ export function PurchaseOrderView() {
                       <td className="px-4 py-3 text-right print-hide">
                         {appliedThisSession.has(item.id) ? (
                           <span className="text-xs text-green-400">✓ Just applied</span>
-                        ) : item.received_at ? (
+                        ) : Number(item.applied_quantity) > 0 ? (
                           <div className="flex flex-col items-end gap-1">
                             <button
                               onClick={() => setReapplyItem(item)}
@@ -306,7 +315,7 @@ export function PurchaseOrderView() {
                   <div className="mt-2 print-hide flex items-center gap-2">
                     {appliedThisSession.has(item.id) ? (
                       <span className="text-xs text-green-400">✓ Just applied</span>
-                    ) : item.received_at ? (
+                    ) : Number(item.applied_quantity) > 0 ? (
                       <>
                         <button onClick={() => setReapplyItem(item)} disabled={!item.product_id} className="text-xs text-amber-400 hover:text-amber-300 disabled:text-zinc-600 disabled:cursor-not-allowed">
                           Re-apply stock

@@ -90,6 +90,8 @@ export function PurchaseOrderForm() {
           id: item.id, product_id: item.product_id || '', product_name: item.product_name,
           quantity: parseFloat(item.quantity) || 0, unit: item.unit || 'Pcs', unit_price: parseFloat(item.unit_price) || 0, total_price: parseFloat(item.total_price) || 0,
           received_at: item.received_at || null,
+          applied_quantity: parseFloat(item.applied_quantity) || 0,
+          applied_landed_cost: parseFloat(item.applied_landed_cost) || 0,
         })))
       }
     } catch (error) {
@@ -227,10 +229,10 @@ export function PurchaseOrderForm() {
         orderId = data.id
       }
 
-      // Reconcile line items: keep existing rows (preserving received_at), update changed
-      // ones, insert new ones, and delete any the user removed. We rely on `received_at`
-      // to know whether a line has already had its stock applied, so we cannot wipe and
-      // re-insert.
+      // Reconcile line items: capture each existing line's previously-applied state
+      // (qty + landed cost) so we can compute a delta against the new state and apply
+      // it to product stock & cost price below. Updates preserve applied_* fields;
+      // deletes are tracked separately to revert stock when removed.
       const lineFields = (item) => ({
         po_id: orderId,
         product_id: item.product_id || null,
@@ -242,18 +244,23 @@ export function PurchaseOrderForm() {
       })
 
       const keepIds = new Set(validItems.filter((i) => i.id).map((i) => i.id))
+      const prevById = new Map()
+      const deletedItems = []
       if (isEditing) {
         const { data: existingRows, error: existingErr } = await supabase
           .from('purchase_order_items')
-          .select('id')
+          .select('id, product_id, quantity, applied_quantity, applied_landed_cost, received_at')
           .eq('po_id', orderId)
         if (existingErr) throw existingErr
-        const toDelete = (existingRows || []).filter((r) => !keepIds.has(r.id)).map((r) => r.id)
-        if (toDelete.length) {
+        for (const row of existingRows || []) {
+          prevById.set(row.id, row)
+          if (!keepIds.has(row.id)) deletedItems.push(row)
+        }
+        if (deletedItems.length) {
           const { error: delErr } = await supabase
             .from('purchase_order_items')
             .delete()
-            .in('id', toDelete)
+            .in('id', deletedItems.map((r) => r.id))
           if (delErr) throw delErr
         }
         for (const item of validItems.filter((i) => i.id)) {
@@ -302,87 +309,173 @@ export function PurchaseOrderForm() {
         }
       }
 
-      // Update stock for any unreceived line whenever the PO is in 'received' status.
-      // Each line has its own `received_at` flag, so adding a new line to an already-
-      // received PO will bump stock for just that line. Wrapped so it can't break the save.
+      // Unified stock + cost reconciliation. For every PO line we know the previously-
+      // applied (qty, landed_cost) on the row; we compute the new (qty, landed_cost)
+      // from the current PO totals and apply the delta to product stock and weighted-
+      // average cost. Deletions revert the previously-applied amount unconditionally;
+      // updates and new lines are gated on the PO being in 'received' status (matching
+      // the existing convention that nothing is bumped for draft/sent/confirmed POs).
       try {
-        if (formData.status === 'received') {
-          const linesToApply = [
-            ...validItems.filter((i) => i.id && !i.received_at),
-            ...insertedItems,
-          ]
-          if (linesToApply.length > 0) {
-            const poSubtotal = validItems.reduce((s, i) => s + (Number(i.total_price) || 0), 0)
-            const taxPct = parseFloat(formData.tax_percentage) || 0
-            const poCargoCharges = parseFloat(formData.cargo_charges) || 0
+        const poSubtotal = validItems.reduce((s, i) => s + (Number(i.total_price) || 0), 0)
+        const taxPct = parseFloat(formData.tax_percentage) || 0
+        const poCargoCharges = parseFloat(formData.cargo_charges) || 0
 
-            const failures = []
-            const appliedIds = []
-            for (const item of linesToApply) {
-              if (!item.product_id) continue
-              try {
-                const { data: prod, error: fetchErr } = await supabase
-                  .from('products')
-                  .select('stock_quantity, cost_price')
-                  .eq('id', item.product_id)
-                  .single()
-                if (fetchErr) throw fetchErr
-                if (!prod) throw new Error('product not found')
+        const computeLandedCost = (qty, total) => {
+          const q = Number(qty) || 0
+          const t = Number(total) || 0
+          if (q <= 0) return 0
+          const lineShare = poSubtotal > 0 ? t / poSubtotal : 0
+          const lc = (t + (t * taxPct / 100) + (lineShare * poCargoCharges)) / q
+          return Number.isFinite(lc) ? lc : 0
+        }
 
-                const itemQty = Number(item.quantity) || 0
-                const itemTotal = Number(item.total_price) || 0
-                const prevStock = Number(prod.stock_quantity) || 0
-                const newStock = prevStock + itemQty
+        const productCache = new Map()
+        const getProduct = async (productId) => {
+          if (productCache.has(productId)) return productCache.get(productId)
+          const { data: prod, error } = await supabase
+            .from('products')
+            .select('stock_quantity, cost_price')
+            .eq('id', productId)
+            .single()
+          if (error) throw error
+          if (!prod) throw new Error('product not found')
+          const state = { stock: Number(prod.stock_quantity) || 0, cost: Number(prod.cost_price) || 0 }
+          productCache.set(productId, state)
+          return state
+        }
 
-                const lineShare = poSubtotal > 0 ? itemTotal / poSubtotal : 0
-                const itemTax = itemTotal * taxPct / 100
-                const cargoShare = lineShare * poCargoCharges
-                const itemLandedTotal = itemTotal + itemTax + cargoShare
-                const landedCostPerUnit = itemQty > 0 ? itemLandedTotal / itemQty : 0
+        const applyDelta = async (productId, qtyDelta, valueDelta, reason) => {
+          if (!productId) return
+          if (qtyDelta === 0 && Math.abs(valueDelta) < 0.0001) return
+          const state = await getProduct(productId)
+          const prevStock = state.stock
+          const prevCost = state.cost
+          const newStock = Math.max(0, prevStock + qtyDelta)
+          const newValue = Math.max(0, prevStock * prevCost + valueDelta)
+          const newCost = newStock > 0 ? Math.round((newValue / newStock) * 100) / 100 : 0
 
-                const existingCost = parseFloat(prod.cost_price) || 0
-                const weightedCostRaw = prevStock > 0
-                  ? ((existingCost * prevStock) + (landedCostPerUnit * itemQty)) / newStock
-                  : landedCostPerUnit
-                const weightedCost = Number.isFinite(weightedCostRaw) ? weightedCostRaw : 0
-                const newCostPrice = Math.round(weightedCost * 100) / 100
+          const { error: updErr } = await supabase
+            .from('products')
+            .update({ stock_quantity: newStock, cost_price: newCost })
+            .eq('id', productId)
+          if (updErr) throw updErr
+          state.stock = newStock
+          state.cost = newCost
 
-                const { error: updErr } = await supabase
-                  .from('products')
-                  .update({ stock_quantity: newStock, cost_price: newCostPrice })
-                  .eq('id', item.product_id)
-                if (updErr) throw updErr
-
-                try {
-                  await supabase.from('stock_adjustments').insert({
-                    product_id: item.product_id,
-                    adjustment_type: 'add',
-                    quantity: itemQty,
-                    previous_stock: prevStock,
-                    new_stock: newStock,
-                    reason: `PO received: ${formData.supplier_name} (landed cost: ${newCostPrice})`,
-                    created_by_email: user?.email || null,
-                  })
-                } catch (logErr) {
-                  console.warn('stock_adjustments log failed (non-fatal):', logErr)
-                }
-
-                appliedIds.push(item.id)
-              } catch (itemErr) {
-                console.error(`Stock update failed for "${item.product_name}":`, itemErr)
-                failures.push(item.product_name)
-              }
-            }
-            if (appliedIds.length) {
-              await supabase
-                .from('purchase_order_items')
-                .update({ received_at: new Date().toISOString() })
-                .in('id', appliedIds)
-            }
-            if (failures.length) {
-              alert(`Stock could not be updated for: ${failures.join(', ')}. Check the console for details.`)
+          if (qtyDelta !== 0) {
+            try {
+              await supabase.from('stock_adjustments').insert({
+                product_id: productId,
+                adjustment_type: qtyDelta > 0 ? 'add' : 'remove',
+                quantity: Math.abs(qtyDelta),
+                previous_stock: prevStock,
+                new_stock: newStock,
+                reason,
+                created_by_email: user?.email || null,
+              })
+            } catch (logErr) {
+              console.warn('stock_adjustments log failed (non-fatal):', logErr)
             }
           }
+        }
+
+        const failures = []
+
+        // Deletions: revert whatever was applied for the removed line.
+        for (const del of deletedItems) {
+          const appliedQty = Number(del.applied_quantity) || 0
+          if (!del.product_id || appliedQty <= 0) continue
+          const appliedCost = Number(del.applied_landed_cost) || 0
+          try {
+            await applyDelta(
+              del.product_id,
+              -appliedQty,
+              -(appliedQty * appliedCost),
+              `PO line removed: ${formData.supplier_name}`
+            )
+          } catch (err) {
+            console.error('Revert failed for deleted line:', err)
+            failures.push('(deleted line)')
+          }
+        }
+
+        // Updates and new lines apply only when the PO is currently 'received'.
+        if (formData.status === 'received') {
+          const lineWork = [
+            ...validItems
+              .filter((i) => i.id)
+              .map((item) => ({ item, prev: prevById.get(item.id), isNew: false })),
+            ...insertedItems.map((row) => ({
+              item: {
+                id: row.id,
+                product_id: row.product_id,
+                product_name: row.product_name,
+                quantity: Number(row.quantity) || 0,
+                unit: row.unit,
+                unit_price: Number(row.unit_price) || 0,
+                total_price: Number(row.total_price) || 0,
+              },
+              prev: { product_id: row.product_id, applied_quantity: 0, applied_landed_cost: 0, received_at: null },
+              isNew: true,
+            })),
+          ]
+
+          for (const { item, prev, isNew } of lineWork) {
+            if (!item.product_id || !prev) continue
+            try {
+              const newQty = Number(item.quantity) || 0
+              const newLandedCost = computeLandedCost(newQty, item.total_price)
+              const prevAppliedQty = Number(prev.applied_quantity) || 0
+              const prevAppliedCost = Number(prev.applied_landed_cost) || 0
+              const productChanged = prev.product_id && prev.product_id !== item.product_id
+
+              if (productChanged) {
+                if (prevAppliedQty > 0) {
+                  await applyDelta(
+                    prev.product_id,
+                    -prevAppliedQty,
+                    -(prevAppliedQty * prevAppliedCost),
+                    `PO line product changed: ${formData.supplier_name}`
+                  )
+                }
+                await applyDelta(
+                  item.product_id,
+                  newQty,
+                  newQty * newLandedCost,
+                  `PO received: ${formData.supplier_name} (landed cost: ${newLandedCost.toFixed(2)})`
+                )
+              } else {
+                const qtyDelta = newQty - prevAppliedQty
+                const valueDelta = (newQty * newLandedCost) - (prevAppliedQty * prevAppliedCost)
+                if (qtyDelta !== 0 || Math.abs(valueDelta) > 0.0001) {
+                  const reasonAction = isNew || prevAppliedQty === 0 ? 'received' : 'updated'
+                  await applyDelta(
+                    item.product_id,
+                    qtyDelta,
+                    valueDelta,
+                    `PO ${reasonAction}: ${formData.supplier_name} (landed cost: ${newLandedCost.toFixed(2)})`
+                  )
+                }
+              }
+
+              const updateFields = {
+                applied_quantity: newQty,
+                applied_landed_cost: newLandedCost,
+              }
+              if (!prev.received_at) updateFields.received_at = new Date().toISOString()
+              await supabase
+                .from('purchase_order_items')
+                .update(updateFields)
+                .eq('id', item.id)
+            } catch (err) {
+              console.error(`Stock update failed for "${item.product_name}":`, err)
+              failures.push(item.product_name)
+            }
+          }
+        }
+
+        if (failures.length) {
+          alert(`Stock could not be updated for: ${failures.join(', ')}. Check the console for details.`)
         }
       } catch (stockError) {
         console.error('Stock update error (PO saved successfully):', stockError)
