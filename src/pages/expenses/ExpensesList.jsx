@@ -197,10 +197,6 @@ export function ExpensesList() {
   const rangeStart = totalCount === 0 ? 0 : page * PAGE_SIZE + 1
   const rangeEnd = Math.min((page + 1) * PAGE_SIZE, totalCount)
 
-  if (loading) {
-    return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
-  }
-
   return (
     <div>
       {showManageCategories && (
@@ -261,7 +257,9 @@ export function ExpensesList() {
         </div>
       </div>
 
-      {expenses.length === 0 ? (
+      {loading ? (
+        <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
+      ) : expenses.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">No expenses found.</div>
       ) : (
         <>

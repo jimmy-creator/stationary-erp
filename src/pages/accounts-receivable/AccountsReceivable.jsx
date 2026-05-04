@@ -122,10 +122,6 @@ export function AccountsReceivable() {
 
   const handlePrint = () => window.print()
 
-  if (loading) {
-    return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
-  }
-
   return (
     <div>
       {/* ══ Printable Report (hidden on screen, visible on print) ══ */}
@@ -326,7 +322,9 @@ export function AccountsReceivable() {
         </div>
       )}
 
-      {filteredSales.length === 0 ? (
+      {loading ? (
+        <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
+      ) : filteredSales.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
           No outstanding receivables. All invoices are paid!
         </div>

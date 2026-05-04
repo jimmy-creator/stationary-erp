@@ -126,10 +126,6 @@ export function SalesList() {
   const totalSales = stats.total
   const unpaidCount = stats.unpaid
 
-  if (loading) {
-    return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
-  }
-
   const formatDateShort = (date) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
   const activeFilters = [
@@ -299,7 +295,9 @@ export function SalesList() {
         </div>
       </div>
 
-      {sales.length === 0 ? (
+      {loading ? (
+        <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
+      ) : sales.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
           No sales found. Create your first sale!
         </div>

@@ -105,10 +105,6 @@ export function AccountsPayable() {
     draft: 'Draft', sent: 'Sent', confirmed: 'Confirmed', received: 'Received',
   }
 
-  if (loading) {
-    return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
-  }
-
   return (
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -218,7 +214,9 @@ export function AccountsPayable() {
         </div>
       )}
 
-      {filteredOrders.length === 0 ? (
+      {loading ? (
+        <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
+      ) : filteredOrders.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
           No outstanding payables. All suppliers are paid!
         </div>
