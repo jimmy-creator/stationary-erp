@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { useStoreSettings } from '../../hooks/useStoreSettings'
+import { SearchInput } from '../../components/SearchInput'
 
 export function PurchaseOrderView() {
   const { id } = useParams()
@@ -18,6 +19,7 @@ export function PurchaseOrderView() {
   const [reapplying, setReapplying] = useState(false)
   const [stockLogCounts, setStockLogCounts] = useState({})
   const [appliedThisSession, setAppliedThisSession] = useState(() => new Set())
+  const [itemSearch, setItemSearch] = useState('')
 
   useEffect(() => { fetchOrder() }, [id])
 
@@ -305,6 +307,22 @@ export function PurchaseOrderView() {
 
         <div className="p-4 lg:p-6 border-b border-zinc-800">
           <h3 className="text-sm font-medium text-zinc-500 uppercase mb-4">Items</h3>
+          {items.length > 1 && (
+            <div className="mb-3 print-hide">
+              <SearchInput value={itemSearch} onChange={setItemSearch} placeholder="Search items..." />
+            </div>
+          )}
+          {(() => {
+            const q = itemSearch.trim().toLowerCase()
+            const visible = items
+              .map((item, i) => ({ item, i }))
+              .filter(({ item }) => !q || (item.product_name || '').toLowerCase().includes(q))
+            const noMatches = q && visible.length === 0
+            return (
+              <>
+                {noMatches && (
+                  <p className="text-sm text-zinc-500 text-center py-4 print-hide">No items match "{itemSearch}".</p>
+                )}
           <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-800">
               <thead className="bg-zinc-800/50">
@@ -318,7 +336,7 @@ export function PurchaseOrderView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {items.map((item, i) => (
+                {visible.map(({ item, i }) => (
                   <tr key={item.id}>
                     <td className="px-4 py-3 text-sm text-zinc-500">{i + 1}</td>
                     <td className="px-4 py-3 text-sm text-zinc-200">{item.product_name}</td>
@@ -357,7 +375,7 @@ export function PurchaseOrderView() {
           </div>
 
           <div className="md:hidden space-y-3">
-            {items.map((item) => (
+            {visible.map(({ item }) => (
               <div key={item.id} className="bg-zinc-800/30 rounded-lg p-3">
                 <div className="flex justify-between"><span className="text-sm text-zinc-200">{item.product_name}</span><span className="font-medium text-zinc-200">{formatCurrency(item.total_price)}</span></div>
                 <p className="text-xs text-zinc-500">{item.quantity} {item.unit} x {formatCurrency(item.unit_price)}</p>
@@ -384,6 +402,9 @@ export function PurchaseOrderView() {
               </div>
             ))}
           </div>
+              </>
+            )
+          })()}
 
           <div className="mt-4 flex justify-end">
             <div className="w-72 space-y-2">

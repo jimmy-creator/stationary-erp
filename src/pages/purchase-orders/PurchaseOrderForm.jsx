@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { ProductSearchSelect } from '../../components/ProductSearchSelect'
+import { SearchInput } from '../../components/SearchInput'
 import { Plus, Trash2 } from 'lucide-react'
 
 export function PurchaseOrderForm() {
@@ -34,6 +35,7 @@ export function PurchaseOrderForm() {
 
   const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit: 'Pcs', unit_price: 0, total_price: 0 }])
   const [autoFocusIndex, setAutoFocusIndex] = useState(null)
+  const [itemSearch, setItemSearch] = useState('')
 
   const [payment, setPayment] = useState({
     amount: '',
@@ -136,6 +138,7 @@ export function PurchaseOrderForm() {
   }
 
   const addItem = useCallback(() => {
+    setItemSearch('')
     setItems((prev) => {
       const next = [...prev, { product_id: '', product_name: '', quantity: 1, unit: 'Pcs', unit_price: 0, total_price: 0 }]
       setAutoFocusIndex(next.length - 1)
@@ -569,8 +572,22 @@ export function PurchaseOrderForm() {
             <button type="button" onClick={addItem} className="flex items-center gap-1 text-sm text-teal-400 hover:text-teal-300" title="Add Item (Ctrl+I)"><Plus className="w-4 h-4" /> Add Item <span className="text-xs text-zinc-600 ml-1 hidden sm:inline">(Ctrl+I)</span></button>
           </div>
 
+          {items.length > 1 && (
+            <div className="mb-3">
+              <SearchInput value={itemSearch} onChange={setItemSearch} placeholder="Search items..." />
+            </div>
+          )}
+
           <div className="space-y-3">
-            {items.map((item, index) => (
+            {(() => {
+              const q = itemSearch.trim().toLowerCase()
+              const visible = items
+                .map((item, index) => ({ item, index }))
+                .filter(({ item }) => !q || !item.product_name || item.product_name.toLowerCase().includes(q))
+              if (visible.length === 0) {
+                return <p className="text-sm text-zinc-500 text-center py-4">No items match "{itemSearch}".</p>
+              }
+              return visible.map(({ item, index }) => (
               <div key={index} className="grid grid-cols-12 gap-2 items-end bg-zinc-800/30 rounded-lg p-3">
                 <div className="col-span-12 md:col-span-4">
                   <label className="block text-xs text-zinc-400 mb-1">Product</label>
@@ -600,7 +617,8 @@ export function PurchaseOrderForm() {
                   <button type="button" onClick={() => removeItem(index)} disabled={items.length <= 1} className="p-2 text-red-400 hover:text-red-300 disabled:opacity-30"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
-            ))}
+              ))
+            })()}
           </div>
 
           <div className="mt-4 flex justify-end">
