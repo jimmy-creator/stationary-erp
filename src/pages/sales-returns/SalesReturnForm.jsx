@@ -562,7 +562,14 @@ export function SalesReturnForm() {
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Status</label>
-              <select value={formData.refund_status} onChange={(e) => setFormData({ ...formData, refund_status: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
+              <select value={formData.refund_status} onChange={(e) => {
+                const status = e.target.value
+                setFormData((prev) => {
+                  if (status === 'pending') return { ...prev, refund_status: status, amount_refunded: '0' }
+                  if (prev.refund_status === 'pending' && prev.amount_refunded === '0') return { ...prev, refund_status: status, amount_refunded: '' }
+                  return { ...prev, refund_status: status }
+                })
+              }} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
                 <option value="refunded">Refunded</option>
                 <option value="pending">Pending</option>
               </select>
