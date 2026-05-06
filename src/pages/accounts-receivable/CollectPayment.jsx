@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Printer } from 'lucide-react'
 
 export function CollectPayment() {
   const { id } = useParams()
@@ -340,6 +340,11 @@ export function CollectPayment() {
                 <div key={payment.id} className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3">
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2">
+                      {payment.receipt_number && (
+                        <Link to={`/sale-payments/${payment.id}`} className="text-sm font-medium text-teal-400 hover:text-teal-300">
+                          {payment.receipt_number}
+                        </Link>
+                      )}
                       <span className="text-sm text-zinc-400">{formatDate(payment.payment_date)}</span>
                       <span className={`px-2 py-0.5 text-xs rounded-full ${
                         payment.payment_method === 'discount' ? 'bg-amber-900/40 text-amber-400' :
@@ -354,6 +359,11 @@ export function CollectPayment() {
                   </div>
                   <div className="flex items-center gap-3 ml-4">
                     <span className={`font-medium ${isNonCash ? 'text-amber-400' : 'text-green-400'}`}>{formatCurrency(payment.amount)}</span>
+                    {payment.receipt_number && (
+                      <Link to={`/sale-payments/${payment.id}`} title="Print receipt" className="text-zinc-400 hover:text-teal-400">
+                        <Printer className="w-4 h-4" />
+                      </Link>
+                    )}
                     <button onClick={() => handleDeletePayment(payment.id, payment.amount)} className="text-red-400 hover:text-red-300">
                       <Trash2 className="w-4 h-4" />
                     </button>

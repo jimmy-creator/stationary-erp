@@ -11,6 +11,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-dig
 const DARK = '#111111'
 const GRAY = '#444444'
 const LIGHT_GRAY = '#666666'
+const HEADER_BG = '#4a90c4'
 
 const PAYMENT_METHOD_LABELS = {
   cash: 'Cash',
@@ -133,15 +134,23 @@ export function CustomerView() {
       ;(paymentsBySale[sale.id] || []).forEach((p) => {
         const isDiscount = p.payment_method === 'discount'
         const isCreditNote = p.payment_method === 'credit_note'
+        // Doc # priority: receipt number > credit-note ref > parent invoice
+        const doc = p.receipt_number
+          ? p.receipt_number
+          : isCreditNote && p.reference
+            ? p.reference
+            : sale.invoice_number
         rows.push({
           date: p.payment_date,
           sortKey: `${p.payment_date}_2_${p.id}`,
           type: isDiscount ? 'discount' : isCreditNote ? 'credit_note' : 'payment',
-          doc: isCreditNote && p.reference ? p.reference : sale.invoice_number,
+          doc,
           description: isDiscount ? 'Settlement discount' : isCreditNote ? 'Credit note (return)' : 'Payment received',
           method: p.payment_method,
           reference: p.reference,
           notes: p.notes,
+          parentInvoice: sale.invoice_number,
+          receiptNumber: p.receipt_number || null,
           debit: 0,
           credit: parseFloat(p.amount || 0),
         })
@@ -419,7 +428,7 @@ export function CustomerView() {
                   { label: 'Balance',      align: 'right',  width: '95px' },
                 ].map((col) => (
                   <th key={col.label} style={{
-                    backgroundImage: 'linear-gradient(#222222, #222222)',
+                    backgroundImage: `linear-gradient(${HEADER_BG}, ${HEADER_BG})`,
                     color: '#ffffff',
                     padding: '7px 8px',
                     textAlign: col.align,
@@ -457,14 +466,22 @@ export function CustomerView() {
                   color: DARK,
                   fontSize: '12px',
                 }
-                const desc = row.method && row.type !== 'invoice'
-                  ? `${row.description} (${PAYMENT_METHOD_LABELS[row.method] || row.method})`
+                const methodLabel = PAYMENT_METHOD_LABELS[row.method] || row.method
+                const baseDesc = row.method && row.type !== 'invoice'
+                  ? `${row.description} (${methodLabel})`
                   : row.description
+                // For payment-type rows whose Doc # is the receipt number, surface
+                // the linked invoice in the description so the trail back to the
+                // sale is preserved.
+                const reInvoice = row.type !== 'invoice' && row.parentInvoice && row.doc !== row.parentInvoice
+                  ? ` — Re: ${row.parentInvoice}`
+                  : ''
+                const desc = `${baseDesc}${reInvoice}${row.notes ? ` — ${row.notes}` : ''}`
                 return (
                   <tr key={i}>
                     <td style={cell}>{fmtDate(row.date)}</td>
                     <td style={{ ...cell, fontWeight: row.type === 'invoice' ? 700 : 400 }}>{row.doc}</td>
-                    <td style={{ ...cell, color: row.type === 'invoice' ? DARK : LIGHT_GRAY }}>{desc}{row.notes ? ` — ${row.notes}` : ''}</td>
+                    <td style={{ ...cell, color: row.type === 'invoice' ? DARK : LIGHT_GRAY }}>{desc}</td>
                     <td style={{ ...cell, textAlign: 'right' }}>{row.debit > 0 ? fmt(row.debit) : ''}</td>
                     <td style={{ ...cell, textAlign: 'right', color: row.credit > 0 ? '#0a7a3a' : DARK }}>{row.credit > 0 ? fmt(row.credit) : ''}</td>
                     <td style={{ ...cell, textAlign: 'right', fontWeight: 700, color: row.balance > 0.01 ? '#cc0000' : DARK }}>{fmt(row.balance)}</td>
