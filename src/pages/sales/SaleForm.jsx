@@ -497,7 +497,15 @@ export function SaleForm() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Payment Method</label>
-              <select value={formData.payment_method} onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
+              <select value={formData.payment_method} onChange={(e) => {
+                const method = e.target.value
+                setFormData((prev) => {
+                  if (isEditing) return { ...prev, payment_method: method }
+                  if (method === 'credit') return { ...prev, payment_method: method, payment_status: 'unpaid', amount_paid: '' }
+                  if (prev.payment_method === 'credit') return { ...prev, payment_method: method, payment_status: 'paid' }
+                  return { ...prev, payment_method: method }
+                })
+              }} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
                 <option value="cash">Cash</option>
                 <option value="card">Card</option>
                 <option value="bank_transfer">Bank Transfer</option>
