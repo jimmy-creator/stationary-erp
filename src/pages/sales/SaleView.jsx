@@ -54,6 +54,7 @@ export function SaleView() {
   const [sale, setSale] = useState(null)
   const [items, setItems] = useState([])
   const [customer, setCustomer] = useState(null)
+  const [returns, setReturns] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -62,13 +63,15 @@ export function SaleView() {
 
   const fetchSale = async () => {
     try {
-      const [saleRes, itemsRes] = await Promise.all([
+      const [saleRes, itemsRes, returnsRes] = await Promise.all([
         supabase.from('sales').select('*').eq('id', id).single(),
         supabase.from('sale_items').select('*, products(unit, barcode, sku)').eq('sale_id', id),
+        supabase.from('sales_returns').select('id, return_number, return_date, grand_total, status, refund_status').eq('sale_id', id).order('return_date', { ascending: false }),
       ])
       if (saleRes.error) throw saleRes.error
       setSale(saleRes.data)
       setItems(itemsRes.data || [])
+      setReturns(returnsRes.data || [])
 
       // Fetch customer address if customer_id exists
       if (saleRes.data.customer_id) {
@@ -146,6 +149,7 @@ export function SaleView() {
           <h1 className="text-xl lg:text-2xl font-bold text-white">{sale.invoice_number}</h1>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <Link to={`/sales-returns/new?sale_id=${id}`} className="flex-1 sm:flex-none text-center px-4 py-2 text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-md hover:bg-orange-500/20">Create Return</Link>
           <Link to={`/sales/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>
           <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>
           <button onClick={() => window.print()} className="flex-1 sm:flex-none px-4 py-2 text-zinc-300 bg-zinc-800 border border-zinc-700 rounded-md hover:bg-zinc-700">Print</button>
@@ -212,6 +216,31 @@ export function SaleView() {
           {sale.notes && <p className="mt-4 text-sm text-zinc-400"><span className="text-zinc-500">Notes: </span>{sale.notes}</p>}
         </div>
       </div>
+
+      {returns.length > 0 && (
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl mt-4 print-hide">
+          <div className="p-4 lg:p-6 border-b border-zinc-800 flex justify-between items-center">
+            <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Returns Against This Invoice</h2>
+            <span className="text-xs text-zinc-500">{returns.length} return{returns.length === 1 ? '' : 's'}</span>
+          </div>
+          <div className="divide-y divide-zinc-800">
+            {returns.map((r) => (
+              <Link key={r.id} to={`/sales-returns/${r.id}`} className="flex items-center justify-between p-4 lg:p-6 hover:bg-zinc-800/40 transition-colors">
+                <div>
+                  <p className="text-teal-400 font-medium">{r.return_number}</p>
+                  <p className="text-xs text-zinc-500">{fmtDate(r.return_date)}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${r.status === 'completed' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                    {r.status === 'completed' ? 'Completed' : 'Cancelled'}
+                  </span>
+                  <span className="font-medium text-zinc-200">{fmt(r.grand_total)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════
           PRINT-ONLY INVOICE

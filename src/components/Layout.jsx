@@ -12,6 +12,7 @@ import {
   Users2,
   ShoppingCart,
   ShoppingBag,
+  Undo2,
   Receipt,
   Users,
   Wallet,
@@ -51,6 +52,7 @@ export function Layout() {
         { to: '/products', label: 'Products', icon: Package, moduleKey: 'products' },
         { to: '/categories', label: 'Categories', icon: FolderOpen, moduleKey: 'categories' },
         { to: '/sales', label: 'Sales', icon: ShoppingCart, moduleKey: 'sales' },
+        { to: '/sales-returns', label: 'Sales Returns', icon: Undo2, moduleKey: 'sales-returns' },
         { to: '/customers', label: 'Customers', icon: Users2, moduleKey: 'customers' },
       ],
     },
@@ -59,6 +61,7 @@ export function Layout() {
       items: [
         { to: '/suppliers', label: 'Suppliers', icon: Truck, moduleKey: 'suppliers' },
         { to: '/purchase-orders', label: 'Purchase Orders', icon: ShoppingBag, moduleKey: 'purchase-orders' },
+        { to: '/purchase-returns', label: 'Purchase Returns', icon: Undo2, moduleKey: 'purchase-returns' },
       ],
     },
     {

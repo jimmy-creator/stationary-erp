@@ -12,6 +12,7 @@ export function PurchaseOrderView() {
   const { settings: store } = useStoreSettings()
   const [order, setOrder] = useState(null)
   const [items, setItems] = useState([])
+  const [returns, setReturns] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -25,13 +26,15 @@ export function PurchaseOrderView() {
 
   const fetchOrder = async () => {
     try {
-      const [orderRes, itemsRes] = await Promise.all([
+      const [orderRes, itemsRes, returnsRes] = await Promise.all([
         supabase.from('purchase_orders').select('*').eq('id', id).single(),
         supabase.from('purchase_order_items').select('*').eq('po_id', id),
+        supabase.from('purchase_returns').select('id, return_number, return_date, grand_total, status, refund_status').eq('po_id', id).order('return_date', { ascending: false }),
       ])
       if (orderRes.error) throw orderRes.error
       setOrder(orderRes.data)
       setItems(itemsRes.data || [])
+      setReturns(returnsRes.data || [])
 
       const productIds = (itemsRes.data || [])
         .map((it) => it.product_id)
@@ -270,6 +273,9 @@ export function PurchaseOrderView() {
           <h1 className="text-xl lg:text-2xl font-bold text-white">{order.po_number}</h1>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {order.status === 'received' && (
+            <Link to={`/purchase-returns/new?po_id=${id}`} className="flex-1 sm:flex-none text-center px-4 py-2 text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-md hover:bg-orange-500/20">Create Return</Link>
+          )}
           <Link to={`/purchase-orders/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>
           <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>
           <button onClick={() => window.print()} className="flex-1 sm:flex-none px-4 py-2 text-zinc-300 bg-zinc-800 border border-zinc-700 rounded-md hover:bg-zinc-700">Print</button>
@@ -427,6 +433,31 @@ export function PurchaseOrderView() {
           </div>
         )}
       </div>
+
+      {returns.length > 0 && (
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl mt-4 print-hide">
+          <div className="p-4 lg:p-6 border-b border-zinc-800 flex justify-between items-center">
+            <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Returns Against This PO</h2>
+            <span className="text-xs text-zinc-500">{returns.length} return{returns.length === 1 ? '' : 's'}</span>
+          </div>
+          <div className="divide-y divide-zinc-800">
+            {returns.map((r) => (
+              <Link key={r.id} to={`/purchase-returns/${r.id}`} className="flex items-center justify-between p-4 lg:p-6 hover:bg-zinc-800/40 transition-colors">
+                <div>
+                  <p className="text-teal-400 font-medium">{r.return_number}</p>
+                  <p className="text-xs text-zinc-500">{formatDate(r.return_date)}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${r.status === 'completed' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                    {r.status === 'completed' ? 'Completed' : 'Cancelled'}
+                  </span>
+                  <span className="font-medium text-zinc-200">{formatCurrency(r.grand_total)}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

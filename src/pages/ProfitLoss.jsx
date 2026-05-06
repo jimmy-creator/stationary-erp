@@ -17,6 +17,7 @@ export function ProfitLoss() {
   })
   const [allSales, setAllSales] = useState([])
   const [allExpenses, setAllExpenses] = useState([])
+  const [allReturns, setAllReturns] = useState([])
   const [productMap, setProductMap] = useState({})
   const [billsMonth, setBillsMonth] = useState('')
 
@@ -32,10 +33,11 @@ export function ProfitLoss() {
   const fetchAllData = async () => {
     try {
       setLoading(true)
-      const [salesRes, expensesRes, productsRes] = await Promise.all([
+      const [salesRes, expensesRes, productsRes, returnsRes] = await Promise.all([
         supabase.from('sales').select('*, sale_items(*)').eq('status', 'completed').order('sale_date', { ascending: false }),
         supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
         supabase.from('products').select('id, name, cost_price'),
+        supabase.from('sales_returns').select('*, sales_return_items(*)').eq('status', 'completed').order('return_date', { ascending: false }),
       ])
 
       const pMap = {}
@@ -43,6 +45,7 @@ export function ProfitLoss() {
       setProductMap(pMap)
       setAllSales(salesRes.data || [])
       setAllExpenses(expensesRes.data || [])
+      setAllReturns(returnsRes.data || [])
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -95,17 +98,30 @@ export function ProfitLoss() {
   const { from, to } = getDateRange()
   const periodSales = allSales.filter((s) => s.sale_date >= from && s.sale_date <= to)
   const periodExpenses = allExpenses.filter((e) => e.expense_date >= from && e.expense_date <= to)
+  const periodReturns = allReturns.filter((r) => r.return_date >= from && r.return_date <= to)
 
   // ── Statement calculations ──
   const grossRevenue = periodSales.reduce((sum, s) => sum + parseFloat(s.grand_total || 0), 0)
   const totalDiscount = periodSales.reduce((sum, s) => sum + parseFloat(s.discount_amount || 0), 0)
-  const netRevenue = grossRevenue
+  const totalReturns = periodReturns.reduce((sum, r) => sum + parseFloat(r.grand_total || 0), 0)
+  const netRevenue = grossRevenue - totalReturns
 
-  const cogs = periodSales.reduce((sum, sale) => {
+  const grossCogs = periodSales.reduce((sum, sale) => {
     return sum + (sale.sale_items || []).reduce((itemSum, item) => {
       return itemSum + ((productMap[item.product_id]?.cost_price || 0) * item.quantity)
     }, 0)
   }, 0)
+
+  // Returned units cost less in COGS only when they were restocked. Damaged
+  // returns stay in COGS (we lost the goods).
+  const returnedCogs = periodReturns.reduce((sum, ret) => {
+    return sum + (ret.sales_return_items || []).reduce((itemSum, item) => {
+      if (!item.restock) return itemSum
+      return itemSum + ((productMap[item.product_id]?.cost_price || 0) * (parseFloat(item.quantity) || 0))
+    }, 0)
+  }, 0)
+
+  const cogs = grossCogs - returnedCogs
 
   const grossProfit = netRevenue - cogs
   const grossMargin = netRevenue > 0 ? ((grossProfit / netRevenue) * 100).toFixed(1) : 0

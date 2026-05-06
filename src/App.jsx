@@ -20,9 +20,15 @@ import { CustomerView } from './pages/customers/CustomerView'
 import { SalesList } from './pages/sales/SalesList'
 import { SaleForm } from './pages/sales/SaleForm'
 import { SaleView } from './pages/sales/SaleView'
+import { SalesReturnsList } from './pages/sales-returns/SalesReturnsList'
+import { SalesReturnForm } from './pages/sales-returns/SalesReturnForm'
+import { SalesReturnView } from './pages/sales-returns/SalesReturnView'
 import { PurchaseOrdersList } from './pages/purchase-orders/PurchaseOrdersList'
 import { PurchaseOrderForm } from './pages/purchase-orders/PurchaseOrderForm'
 import { PurchaseOrderView } from './pages/purchase-orders/PurchaseOrderView'
+import { PurchaseReturnsList } from './pages/purchase-returns/PurchaseReturnsList'
+import { PurchaseReturnForm } from './pages/purchase-returns/PurchaseReturnForm'
+import { PurchaseReturnView } from './pages/purchase-returns/PurchaseReturnView'
 import { ExpensesList } from './pages/expenses/ExpensesList'
 import { ExpenseForm } from './pages/expenses/ExpenseForm'
 import { EmployeesList } from './pages/employees/EmployeesList'
@@ -71,6 +77,10 @@ function App() {
             <Route path="/sales/new" element={<ProtectedModule moduleKey="sales"><SaleForm /></ProtectedModule>} />
             <Route path="/sales/:id" element={<ProtectedModule moduleKey="sales"><SaleView /></ProtectedModule>} />
             <Route path="/sales/:id/edit" element={<ProtectedModule moduleKey="sales"><SaleForm /></ProtectedModule>} />
+            <Route path="/sales-returns" element={<ProtectedModule moduleKey="sales-returns"><SalesReturnsList /></ProtectedModule>} />
+            <Route path="/sales-returns/new" element={<ProtectedModule moduleKey="sales-returns"><SalesReturnForm /></ProtectedModule>} />
+            <Route path="/sales-returns/:id" element={<ProtectedModule moduleKey="sales-returns"><SalesReturnView /></ProtectedModule>} />
+            <Route path="/sales-returns/:id/edit" element={<ProtectedModule moduleKey="sales-returns"><SalesReturnForm /></ProtectedModule>} />
             <Route path="/customers" element={<ProtectedModule moduleKey="customers"><CustomersList /></ProtectedModule>} />
             <Route path="/customers/new" element={<ProtectedModule moduleKey="customers"><CustomerForm /></ProtectedModule>} />
             <Route path="/customers/:id" element={<ProtectedModule moduleKey="customers"><CustomerView /></ProtectedModule>} />
@@ -85,6 +95,10 @@ function App() {
             <Route path="/purchase-orders/new" element={<ProtectedModule moduleKey="purchase-orders"><PurchaseOrderForm /></ProtectedModule>} />
             <Route path="/purchase-orders/:id" element={<ProtectedModule moduleKey="purchase-orders"><PurchaseOrderView /></ProtectedModule>} />
             <Route path="/purchase-orders/:id/edit" element={<ProtectedModule moduleKey="purchase-orders"><PurchaseOrderForm /></ProtectedModule>} />
+            <Route path="/purchase-returns" element={<ProtectedModule moduleKey="purchase-returns"><PurchaseReturnsList /></ProtectedModule>} />
+            <Route path="/purchase-returns/new" element={<ProtectedModule moduleKey="purchase-returns"><PurchaseReturnForm /></ProtectedModule>} />
+            <Route path="/purchase-returns/:id" element={<ProtectedModule moduleKey="purchase-returns"><PurchaseReturnView /></ProtectedModule>} />
+            <Route path="/purchase-returns/:id/edit" element={<ProtectedModule moduleKey="purchase-returns"><PurchaseReturnForm /></ProtectedModule>} />
 
             {/* Finance */}
             <Route path="/expenses" element={<ProtectedModule moduleKey="expenses"><ExpensesList /></ProtectedModule>} />
