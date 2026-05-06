@@ -27,6 +27,7 @@ export function SupplierView() {
   const [supplier, setSupplier] = useState(null)
   const [orders, setOrders] = useState([])
   const [payments, setPayments] = useState([])
+  const [returns, setReturns] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -62,6 +63,16 @@ export function SupplierView() {
       } else {
         setPayments([])
       }
+
+      // Pull every completed return tied to this supplier so refunds appear
+      // on the statement regardless of method.
+      const returnsRes = await supabase
+        .from('purchase_returns')
+        .select('id, return_number, return_date, po_id, grand_total, refund_method, refund_status, amount_refunded, reason')
+        .eq('supplier_id', id)
+        .eq('status', 'completed')
+        .order('return_date', { ascending: true })
+      setReturns(returnsRes.data || [])
     } catch (error) {
       console.error('Error fetching supplier:', error)
     } finally {
@@ -123,19 +134,18 @@ export function SupplierView() {
       }
 
       ;(paymentsByPo[po.id] || []).forEach((p) => {
-        const isDebitNote = p.payment_method === 'debit_note'
-        // Doc # priority: receipt number > debit-note ref > parent PO
+        // Skip debit-note rows — they're represented by the matching
+        // purchase_return entry below to avoid double-counting.
+        if (p.payment_method === 'debit_note') return
         const doc = p.receipt_number
           ? p.receipt_number
-          : isDebitNote && p.reference
-            ? p.reference
-            : po.po_number
+          : po.po_number
         rows.push({
           date: p.payment_date,
           sortKey: `${p.payment_date}_2_${p.id}`,
-          type: isDebitNote ? 'debit_note' : 'payment',
+          type: 'payment',
           doc,
-          description: isDebitNote ? 'Debit note (return)' : 'Payment made',
+          description: 'Payment made',
           method: p.payment_method,
           reference: p.reference,
           notes: p.notes,
@@ -147,9 +157,51 @@ export function SupplierView() {
       })
     })
 
+    // Returns: every completed return is a credit (goods sent back reduce what
+    // we owe). When the supplier refunded cash/bank_transfer, emit an
+    // offsetting debit so the running balance reflects we're square. Debit-note
+    // refunds need no offset (the credit row IS the refund mechanism).
+    const poById = new Map(orders.map((o) => [o.id, o]))
+    returns.forEach((ret) => {
+      const parentPoRow = ret.po_id ? poById.get(ret.po_id) : null
+      const parentPo = parentPoRow ? parentPoRow.po_number : null
+      const grand = parseFloat(ret.grand_total) || 0
+      if (grand > 0) {
+        rows.push({
+          date: ret.return_date,
+          sortKey: `${ret.return_date}_3_${ret.id}_return`,
+          type: 'return',
+          doc: ret.return_number,
+          description: 'Purchase return',
+          method: ret.refund_method,
+          notes: ret.reason || null,
+          parentPo,
+          debit: 0,
+          credit: grand,
+        })
+      }
+      const refunded = parseFloat(ret.amount_refunded) || 0
+      const cashRefunded = ret.refund_status === 'refunded'
+        && refunded > 0
+        && (ret.refund_method === 'cash' || ret.refund_method === 'bank_transfer')
+      if (cashRefunded) {
+        rows.push({
+          date: ret.return_date,
+          sortKey: `${ret.return_date}_4_${ret.id}_refund`,
+          type: 'refund',
+          doc: ret.return_number,
+          description: 'Refund received',
+          method: ret.refund_method,
+          parentPo,
+          debit: refunded,
+          credit: 0,
+        })
+      }
+    })
+
     rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
     return rows
-  }, [orders, payments])
+  }, [orders, payments, returns])
 
   // Slice the ledger to the picked date range, computing the opening balance
   // from everything strictly before `fromDate`.
@@ -204,7 +256,11 @@ export function SupplierView() {
 
   const totalPurchased = orders.reduce((sum, o) => sum + parseFloat(o.grand_total || 0), 0)
   const totalPaid = orders.reduce((sum, o) => sum + parseFloat(o.amount_paid || 0), 0)
-  const closingBalance = totalPurchased - totalPaid
+  // Closing balance derived from the full ledger so returns and pending
+  // refunds flow through correctly.
+  const allDebit = allRows.reduce((s, r) => s + r.debit, 0)
+  const allCredit = allRows.reduce((s, r) => s + r.credit, 0)
+  const closingBalance = allDebit - allCredit
   const generatedAt = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
 
   return (
