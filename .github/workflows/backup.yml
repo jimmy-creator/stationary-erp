@@ -1,9 +1,9 @@
-name: Daily Database Backup → Google Drive
+name: Daily database backup → Google Drive
 
 on:
   schedule:
-    - cron: '0 2 * * *'   # 2:00 AM UTC every day
-  workflow_dispatch:        # manual trigger from GitHub Actions tab
+    - cron: '0 2 * * *'   # 02:00 UTC daily
+  workflow_dispatch:        # manual trigger from the Actions tab
 
 jobs:
   backup:
@@ -11,48 +11,47 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Install postgresql-client & rclone
+      - name: Install rclone & PostgreSQL 17 client
         run: |
-          sudo apt-get install -y postgresql-client
           curl https://rclone.org/install.sh | sudo bash
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-17
 
-      - name: Configure rclone with OAuth token
+      - name: Configure rclone
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
         run: |
           mkdir -p ~/.config/rclone
-          cat > ~/.config/rclone/rclone.conf << EOF
-          [gdrive]
-          type = drive
-          token = ${{ secrets.RCLONE_GDRIVE_TOKEN }}
-          root_folder_id = ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          EOF
+          printf '%s' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          chmod 600 ~/.config/rclone/rclone.conf
 
-      - name: Dump Supabase database
+      - name: Dump database
         env:
-          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
-          BACKUP_FILE="binthawar_${TIMESTAMP}.sql.gz"
-
-          pg_dump \
-            "postgresql://postgres:${PGPASSWORD}@db.gfrkbcxeugwzbnieeezi.supabase.co:5432/postgres" \
-            --no-owner \
-            --no-acl \
-            --schema=public \
-            | gzip > "${BACKUP_FILE}"
-
-          SIZE=$(du -sh "${BACKUP_FILE}" | cut -f1)
-          echo "BACKUP_FILE=${BACKUP_FILE}" >> $GITHUB_ENV
-          echo "✅ Backup created: ${BACKUP_FILE} (${SIZE})"
+          TIMESTAMP=$(date -u +%Y-%m-%d_%H%M%S)
+          BACKUP_FILE="erp-db-${TIMESTAMP}.sql.gz"
+          pg_dump "$DATABASE_URL" --no-owner --no-acl --schema=public \
+            | gzip > "$BACKUP_FILE"
+          SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
+          echo "BACKUP_FILE=$BACKUP_FILE" >> "$GITHUB_ENV"
+          echo "Backup created: $BACKUP_FILE ($SIZE)"
 
       - name: Upload to Google Drive
         run: |
-          rclone copy "${{ env.BACKUP_FILE }}" gdrive: --drive-use-trash=false
-          echo "✅ Uploaded ${{ env.BACKUP_FILE }} to Google Drive"
+          rclone copy "$BACKUP_FILE" gdrive:ERP-Backups/db-dumps/ --stats-one-line
 
-      - name: Keep only last 30 backups
+      - name: Keep only the 30 most recent dumps
         run: |
-          rclone lsf gdrive: --format "t;n" | sort | head -n -30 | while IFS=';' read -r ts name; do
-            echo "🗑 Deleting old backup: ${name}"
-            rclone delete "gdrive:${name}" --drive-use-trash=false
-          done
-          echo "✅ Cleanup done"
+          rclone lsf gdrive:ERP-Backups/db-dumps/ --format "tp" --files-only \
+            | sort | head -n -30 \
+            | while IFS=';' read -r ts name; do
+                [ -z "$name" ] && continue
+                echo "Deleting $name (ts=$ts)"
+                rclone delete "gdrive:ERP-Backups/db-dumps/$name"
+              done

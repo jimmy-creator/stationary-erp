@@ -1,0 +1,55 @@
+name: Weekly CSV backup → Google Drive
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'   # 03:00 UTC every Sunday
+  workflow_dispatch:        # manual trigger from the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+        run: |
+          mkdir -p ~/.config/rclone
+          printf '%s' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          chmod 600 ~/.config/rclone/rclone.conf
+
+      - name: Write .env for backup script
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_KEY }}
+        run: |
+          {
+            printf 'VITE_SUPABASE_URL=%s\n' "$SUPABASE_URL"
+            printf 'VITE_SUPABASE_SERVICE_KEY=%s\n' "$SUPABASE_SERVICE_KEY"
+          } > .env
+
+      - name: Run CSV backup
+        run: |
+          chmod +x scripts/backup.sh
+          ./scripts/backup.sh
+
+      - name: Upload to Google Drive
+        run: |
+          rclone copy backups/ gdrive:ERP-Backups/csv/ \
+            --include "*.tar.gz" --stats-one-line
+
+      - name: Keep only the 12 most recent CSV bundles
+        run: |
+          rclone lsf gdrive:ERP-Backups/csv/ --format "tp" --files-only \
+            | sort | head -n -12 \
+            | while IFS=';' read -r ts name; do
+                [ -z "$name" ] && continue
+                echo "Deleting $name (ts=$ts)"
+                rclone delete "gdrive:ERP-Backups/csv/$name"
+              done
