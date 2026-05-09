@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Package, Tag, AlertTriangle, Plus, Minus, RotateCcw } from 'lucide-react'
+import { Package, Tag, AlertTriangle, Plus, Minus, RotateCcw, ShoppingCart, Truck } from 'lucide-react'
 
 export function ProductView() {
   const { id } = useParams()
@@ -10,6 +10,10 @@ export function ProductView() {
   const { user } = useAuth()
   const [product, setProduct] = useState(null)
   const [adjustments, setAdjustments] = useState([])
+  const [recentSales, setRecentSales] = useState([])
+  const [recentPOs, setRecentPOs] = useState([])
+  const [totalSoldQty, setTotalSoldQty] = useState(0)
+  const [totalPurchasedQty, setTotalPurchasedQty] = useState(0)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -26,13 +30,39 @@ export function ProductView() {
 
   const fetchProduct = async () => {
     try {
-      const [productRes, adjustmentsRes] = await Promise.all([
+      const [productRes, adjustmentsRes, salesRes, posRes, allSalesRes, allPosRes] = await Promise.all([
         supabase.from('products').select('*, categories(name)').eq('id', id).single(),
         supabase.from('stock_adjustments').select('*').eq('product_id', id).order('created_at', { ascending: false }).limit(20),
+        supabase
+          .from('sale_items')
+          .select('id, quantity, unit_price, total_price, sale_id, sales(invoice_number, sale_date, customer_name, status)')
+          .eq('product_id', id)
+          .order('created_at', { ascending: false })
+          .limit(10),
+        supabase
+          .from('purchase_order_items')
+          .select('id, quantity, unit_price, total_price, po_id, purchase_orders(po_number, po_date, supplier_name, status)')
+          .eq('product_id', id)
+          .order('created_at', { ascending: false })
+          .limit(10),
+        supabase
+          .from('sale_items')
+          .select('quantity, sales!inner(status)')
+          .eq('product_id', id)
+          .neq('sales.status', 'cancelled'),
+        supabase
+          .from('purchase_order_items')
+          .select('quantity, purchase_orders!inner(status)')
+          .eq('product_id', id)
+          .neq('purchase_orders.status', 'cancelled'),
       ])
       if (productRes.error) throw productRes.error
       setProduct(productRes.data)
       setAdjustments(adjustmentsRes.data || [])
+      setRecentSales((salesRes.data || []).filter((row) => row.sales))
+      setRecentPOs((posRes.data || []).filter((row) => row.purchase_orders))
+      setTotalSoldQty((allSalesRes.data || []).reduce((sum, r) => sum + (Number(r.quantity) || 0), 0))
+      setTotalPurchasedQty((allPosRes.data || []).reduce((sum, r) => sum + (Number(r.quantity) || 0), 0))
     } catch (error) {
       console.error('Error fetching product:', error)
       // Fallback if stock_adjustments table doesn't exist
@@ -314,6 +344,100 @@ export function ProductView() {
             {adjustForm.type === 'set' && `Stock will change: ${product.stock_quantity} → ${parseFloat(adjustForm.quantity) || 0}`}
           </p>
         )}
+      </div>
+
+      {/* Recent Sales & Purchase Orders */}
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <h2 className="text-lg font-medium text-white flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-teal-400" />
+              Recent Sales
+            </h2>
+            <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20 whitespace-nowrap">
+              Total sold: {totalSoldQty} {product.unit}
+            </span>
+          </div>
+          {recentSales.length === 0 ? (
+            <p className="text-sm text-zinc-500">No sales for this product yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {recentSales.map((row) => (
+                <Link
+                  key={row.id}
+                  to={`/sales/${row.sale_id}`}
+                  className="block bg-zinc-800/30 hover:bg-zinc-800/60 rounded-lg p-3 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-teal-400">{row.sales.invoice_number}</span>
+                        {row.sales.status === 'returned' && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-orange-900/50 text-orange-400">Returned</span>
+                        )}
+                        {row.sales.status === 'cancelled' && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-900/50 text-red-400">Cancelled</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-0.5 truncate">
+                        {formatDate(row.sales.sale_date)} • {row.sales.customer_name || 'Walk-in'}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm text-zinc-300">{row.quantity} × {formatCurrency(row.unit_price)}</div>
+                      <div className="text-xs text-zinc-500">{formatCurrency(row.total_price)}</div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4 gap-2">
+            <h2 className="text-lg font-medium text-white flex items-center gap-2">
+              <Truck className="w-5 h-5 text-amber-400" />
+              Recent Purchase Orders
+            </h2>
+            <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 whitespace-nowrap">
+              Total purchased: {totalPurchasedQty} {product.unit}
+            </span>
+          </div>
+          {recentPOs.length === 0 ? (
+            <p className="text-sm text-zinc-500">No purchase orders for this product yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {recentPOs.map((row) => (
+                <Link
+                  key={row.id}
+                  to={`/purchase-orders/${row.po_id}`}
+                  className="block bg-zinc-800/30 hover:bg-zinc-800/60 rounded-lg p-3 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-amber-400">{row.purchase_orders.po_number}</span>
+                        {row.purchase_orders.status && row.purchase_orders.status !== 'received' && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-zinc-800 text-zinc-400 capitalize">
+                            {row.purchase_orders.status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-0.5 truncate">
+                        {formatDate(row.purchase_orders.po_date)} • {row.purchase_orders.supplier_name}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm text-zinc-300">{row.quantity} × {formatCurrency(row.unit_price)}</div>
+                      <div className="text-xs text-zinc-500">{formatCurrency(row.total_price)}</div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Adjustment History */}
