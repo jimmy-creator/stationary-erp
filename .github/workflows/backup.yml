@@ -44,14 +44,14 @@ jobs:
 
       - name: Upload to Google Drive
         run: |
-          rclone copy "$BACKUP_FILE" gdrive:ERP-Backups/db-dumps/ --stats-one-line
+          rclone copy "$BACKUP_FILE" gdrive1:ERP-Backups/db-dumps/ --stats-one-line
 
       - name: Keep only the 30 most recent dumps
         run: |
-          rclone lsf gdrive:ERP-Backups/db-dumps/ --format "tp" --files-only \
+          rclone lsf gdrive1:ERP-Backups/db-dumps/ --format "tp" --files-only \
             | sort | head -n -30 \
             | while IFS=';' read -r ts name; do
                 [ -z "$name" ] && continue
                 echo "Deleting $name (ts=$ts)"
-                rclone delete "gdrive:ERP-Backups/db-dumps/$name"
+                rclone delete "gdrive1:ERP-Backups/db-dumps/$name"
               done

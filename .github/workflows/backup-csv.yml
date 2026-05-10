@@ -41,15 +41,15 @@ jobs:
 
       - name: Upload to Google Drive
         run: |
-          rclone copy backups/ gdrive:ERP-Backups/csv/ \
+          rclone copy backups/ gdrive1:ERP-Backups/csv/ \
             --include "*.tar.gz" --stats-one-line
 
       - name: Keep only the 12 most recent CSV bundles
         run: |
-          rclone lsf gdrive:ERP-Backups/csv/ --format "tp" --files-only \
+          rclone lsf gdrive1:ERP-Backups/csv/ --format "tp" --files-only \
             | sort | head -n -12 \
             | while IFS=';' read -r ts name; do
                 [ -z "$name" ] && continue
                 echo "Deleting $name (ts=$ts)"
-                rclone delete "gdrive:ERP-Backups/csv/$name"
+                rclone delete "gdrive1:ERP-Backups/csv/$name"
               done
