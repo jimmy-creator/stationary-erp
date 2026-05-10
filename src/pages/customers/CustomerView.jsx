@@ -115,6 +115,25 @@ export function CustomerView() {
     })
 
     const rows = []
+
+    // Pre-existing balance carried over from before this customer's first
+    // transaction. Sits at the top of the ledger so subsequent activity flows
+    // off it. Positive opening = customer owed us (debit); negative = we owed
+    // them (credit on file).
+    const openingAmt = parseFloat(customer?.opening_balance || 0)
+    const openingDate = customer?.opening_balance_date
+    if (Math.abs(openingAmt) > 0.001 && openingDate) {
+      rows.push({
+        date: openingDate,
+        sortKey: `${openingDate}_-1_opening`,
+        type: 'opening',
+        doc: '—',
+        description: 'Opening balance',
+        debit: openingAmt > 0 ? openingAmt : 0,
+        credit: openingAmt < 0 ? -openingAmt : 0,
+      })
+    }
+
     sales.forEach((sale) => {
       rows.push({
         date: sale.sale_date,
@@ -214,7 +233,7 @@ export function CustomerView() {
 
     rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
     return rows
-  }, [sales, payments, returns])
+  }, [sales, payments, returns, customer])
 
   // Slice the ledger to the picked date range, computing the opening balance
   // from everything strictly before `fromDate`.
@@ -245,19 +264,25 @@ export function CustomerView() {
   const aging = useMemo(() => {
     const buckets = { current: 0, b30: 0, b60: 0, b90: 0, b90plus: 0 }
     const today = new Date()
+    const bucketize = (amount, fromDate) => {
+      if (amount <= 0.01) return
+      const days = Math.max(0, Math.floor((today - new Date(fromDate)) / (1000 * 60 * 60 * 24)))
+      if (days <= 30) buckets.current += amount
+      else if (days <= 60) buckets.b30 += amount
+      else if (days <= 90) buckets.b60 += amount
+      else buckets.b90plus += amount
+    }
     sales.forEach((sale) => {
       const total = parseFloat(sale.grand_total) || 0
       const paid = parseFloat(sale.amount_paid) || 0
-      const bal = total - paid
-      if (bal <= 0.01) return
-      const days = Math.max(0, Math.floor((today - new Date(sale.sale_date)) / (1000 * 60 * 60 * 24)))
-      if (days <= 30) buckets.current += bal
-      else if (days <= 60) buckets.b30 += bal
-      else if (days <= 90) buckets.b60 += bal
-      else buckets.b90plus += bal
+      bucketize(total - paid, sale.sale_date)
     })
+    const openingAmt = parseFloat(customer?.opening_balance || 0)
+    if (openingAmt > 0.01 && customer?.opening_balance_date) {
+      bucketize(openingAmt, customer.opening_balance_date)
+    }
     return buckets
-  }, [sales])
+  }, [sales, customer])
 
   if (loading) {
     return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>

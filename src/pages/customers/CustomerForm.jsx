@@ -12,6 +12,7 @@ export function CustomerForm() {
   const [formData, setFormData] = useState({
     name: '', phone: '', email: '', address: '',
     customer_type: 'retail', notes: '', is_active: true,
+    opening_balance: '', opening_balance_date: '',
   })
 
   useEffect(() => {
@@ -27,6 +28,8 @@ export function CustomerForm() {
         name: data.name || '', phone: data.phone || '', email: data.email || '',
         address: data.address || '', customer_type: data.customer_type || 'retail',
         notes: data.notes || '', is_active: data.is_active ?? true,
+        opening_balance: data.opening_balance != null ? String(data.opening_balance) : '',
+        opening_balance_date: data.opening_balance_date || '',
       })
     } catch (error) {
       console.error('Error fetching customer:', error)
@@ -37,6 +40,17 @@ export function CustomerForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const openingRaw = formData.opening_balance.trim()
+    const openingNum = openingRaw === '' ? 0 : parseFloat(openingRaw)
+    if (openingRaw !== '' && Number.isNaN(openingNum)) {
+      alert('Opening balance must be a number')
+      return
+    }
+    if (Math.abs(openingNum) > 0.001 && !formData.opening_balance_date) {
+      alert('Please pick an opening balance date')
+      return
+    }
+
     setSaving(true)
     try {
       const customerData = {
@@ -47,6 +61,8 @@ export function CustomerForm() {
         customer_type: formData.customer_type,
         notes: formData.notes || null,
         is_active: formData.is_active,
+        opening_balance: openingNum,
+        opening_balance_date: Math.abs(openingNum) > 0.001 ? formData.opening_balance_date : null,
       }
 
       if (isEditing) {
@@ -112,6 +128,21 @@ export function CustomerForm() {
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-zinc-300 mb-1">Notes</label>
               <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
+          <h2 className="text-sm font-medium text-zinc-200 mb-1">Opening Balance</h2>
+          <p className="text-xs text-zinc-500 mb-4">Pre-existing balance carried over from before this customer was added. Use a positive amount if the customer owes you, negative if you owe them. Leave blank to skip.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Amount (QAR)</label>
+              <input type="number" step="0.01" value={formData.opening_balance} onChange={(e) => setFormData({ ...formData, opening_balance: e.target.value })} placeholder="0.00" className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">As Of Date</label>
+              <input type="date" value={formData.opening_balance_date} onChange={(e) => setFormData({ ...formData, opening_balance_date: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
             </div>
           </div>
         </div>
