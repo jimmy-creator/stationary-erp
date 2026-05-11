@@ -115,25 +115,6 @@ export function CustomerView() {
     })
 
     const rows = []
-
-    // Pre-existing balance carried over from before this customer's first
-    // transaction. Sits at the top of the ledger so subsequent activity flows
-    // off it. Positive opening = customer owed us (debit); negative = we owed
-    // them (credit on file).
-    const openingAmt = parseFloat(customer?.opening_balance || 0)
-    const openingDate = customer?.opening_balance_date
-    if (Math.abs(openingAmt) > 0.001 && openingDate) {
-      rows.push({
-        date: openingDate,
-        sortKey: `${openingDate}_-1_opening`,
-        type: 'opening',
-        doc: '—',
-        description: 'Opening balance',
-        debit: openingAmt > 0 ? openingAmt : 0,
-        credit: openingAmt < 0 ? -openingAmt : 0,
-      })
-    }
-
     sales.forEach((sale) => {
       rows.push({
         date: sale.sale_date,
@@ -233,12 +214,20 @@ export function CustomerView() {
 
     rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
     return rows
-  }, [sales, payments, returns, customer])
+  }, [sales, payments, returns])
+
+  // Pre-existing balance carried over from before any transactions in this
+  // system. Positive = customer owed us; negative = we owed them. Always
+  // contributes to "opening" — never to the period's debit/credit totals.
+  const openingBalance = parseFloat(customer?.opening_balance || 0)
+  const hasOpening = Math.abs(openingBalance) > 0.001
 
   // Slice the ledger to the picked date range, computing the opening balance
-  // from everything strictly before `fromDate`.
+  // from everything strictly before `fromDate`. The customer's stored opening
+  // balance always seeds `opening` — it's the starting point of the account,
+  // not a period transaction, so it never gets summed into periodDebit/credit.
   const ledgerView = useMemo(() => {
-    let opening = 0
+    let opening = openingBalance
     const period = []
     let periodDebit = 0
     let periodCredit = 0
@@ -258,7 +247,7 @@ export function CustomerView() {
       return { ...r, balance: bal }
     })
     return { opening, rows: withBalance, periodDebit, periodCredit, closing: opening + periodDebit - periodCredit }
-  }, [allRows, fromDate, toDate])
+  }, [allRows, fromDate, toDate, openingBalance])
 
   // ─── Outstanding aging buckets (per-invoice balance × age) ───
   const aging = useMemo(() => {
@@ -298,7 +287,7 @@ export function CustomerView() {
   // so pending refunds and ad-hoc returns flow through correctly.
   const allDebit = allRows.reduce((s, r) => s + r.debit, 0)
   const allCredit = allRows.reduce((s, r) => s + r.credit, 0)
-  const closingBalance = allDebit - allCredit
+  const closingBalance = openingBalance + allDebit - allCredit
   const generatedAt = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
 
   return (
@@ -478,7 +467,7 @@ export function CustomerView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '14px', border: '1px solid #cccccc' }}>
           <tbody>
             <tr>
-              {fromDate && (
+              {(fromDate || hasOpening) && (
                 <>
                   <td style={{ padding: '8px 10px', backgroundImage: 'linear-gradient(#f5f5f5, #f5f5f5)', borderRight: '1px solid #cccccc', fontSize: '10px', color: GRAY, textTransform: 'uppercase', fontWeight: 700 }}>Opening Balance</td>
                   <td style={{ padding: '8px 10px', borderRight: '1px solid #cccccc', fontSize: '13px', fontWeight: 700, color: DARK }}>{fmt(ledgerView.opening)}</td>
@@ -530,10 +519,10 @@ export function CustomerView() {
               </tr>
             </thead>
             <tbody>
-              {fromDate && (
+              {(fromDate || hasOpening) && (
                 <tr>
                   <td colSpan={5} style={{ padding: '6px 8px', backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderBottom: '1px solid #cccccc', fontWeight: 700, color: DARK, fontSize: '12px' }}>
-                    Opening Balance ({fmtDate(fromDate)})
+                    Opening Balance{fromDate ? ` (${fmtDate(fromDate)})` : customer.opening_balance_date ? ` (${fmtDate(customer.opening_balance_date)})` : ''}
                   </td>
                   <td style={{ padding: '6px 8px', backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderBottom: '1px solid #cccccc', textAlign: 'right', fontWeight: 700, fontSize: '12px', color: ledgerView.opening > 0.01 ? '#cc0000' : DARK }}>
                     {fmt(ledgerView.opening)}
