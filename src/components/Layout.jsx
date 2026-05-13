@@ -20,6 +20,7 @@ import {
   Calculator,
   Banknote,
   CheckCircle,
+  BookOpen,
   FileBarChart,
   BarChart3,
   Settings,
@@ -77,6 +78,7 @@ export function Layout() {
     {
       title: 'Reports',
       items: [
+        { to: '/daybook', label: 'Daybook', icon: BookOpen, moduleKey: 'daybook' },
         { to: '/profit-loss', label: 'P&L Statement', icon: FileBarChart, moduleKey: 'profit-loss' },
         { to: '/stock-value', label: 'Stock Value', icon: BarChart3, moduleKey: 'stock-value' },
         { to: '/reconciliation', label: 'Reconciliation', icon: CheckCircle, moduleKey: 'reconciliation' },

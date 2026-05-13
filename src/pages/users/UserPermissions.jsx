@@ -12,6 +12,7 @@ import {
   Undo2,
   Receipt,
   Users,
+  BookOpen,
   Eye,
   Edit3,
   Check,
@@ -29,6 +30,7 @@ const MODULES = [
   { key: 'expenses', label: 'Expenses', icon: Receipt },
   { key: 'employees', label: 'Employees', icon: Users },
   { key: 'profits', label: 'Profits', icon: ShoppingBag },
+  { key: 'daybook', label: 'Daybook', icon: BookOpen },
 ]
 
 export function UserPermissions() {

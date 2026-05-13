@@ -35,6 +35,7 @@ import { EmployeesList } from './pages/employees/EmployeesList'
 import { EmployeeForm } from './pages/employees/EmployeeForm'
 import { EmployeeView } from './pages/employees/EmployeeView'
 import { DailyCash } from './pages/DailyCash'
+import { Daybook } from './pages/Daybook'
 import { CashAccounts } from './pages/CashAccounts'
 import { ProfitLoss } from './pages/ProfitLoss'
 import { StockValue } from './pages/StockValue'
@@ -119,6 +120,7 @@ function App() {
             <Route path="/profit-loss" element={<ProtectedModule moduleKey="profit-loss"><ProfitLoss /></ProtectedModule>} />
             <Route path="/stock-value" element={<ProtectedModule moduleKey="stock-value"><StockValue /></ProtectedModule>} />
             <Route path="/reconciliation" element={<ProtectedModule moduleKey="reconciliation"><Reconciliation /></ProtectedModule>} />
+            <Route path="/daybook" element={<ProtectedModule moduleKey="daybook"><Daybook /></ProtectedModule>} />
 
             {/* People */}
             <Route path="/employees" element={<ProtectedModule moduleKey="employees"><EmployeesList /></ProtectedModule>} />
