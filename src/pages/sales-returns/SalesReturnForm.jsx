@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { ProductSearchSelect } from '../../components/ProductSearchSelect'
+import { CustomerSearchSelect } from '../../components/CustomerSearchSelect'
 import { Plus, Trash2, AlertCircle } from 'lucide-react'
 
 export function SalesReturnForm() {
@@ -52,7 +53,7 @@ export function SalesReturnForm() {
 
   const fetchData = async () => {
     const [customersRes, productsRes, salesRes] = await Promise.all([
-      supabase.from('customers').select('id, name').eq('is_active', true).order('name'),
+      supabase.from('customers').select('id, name, phone').eq('is_active', true).order('name'),
       supabase.from('products').select('id, name, selling_price, cost_price, stock_quantity, unit').eq('is_active', true).order('name'),
       supabase.from('sales').select('id, invoice_number, customer_name, sale_date, grand_total').eq('status', 'completed').order('sale_date', { ascending: false }).limit(200),
     ])
@@ -448,13 +449,16 @@ export function SalesReturnForm() {
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Customer</label>
-              <select value={formData.customer_id} onChange={(e) => {
-                const c = customers.find((x) => x.id === e.target.value)
-                setFormData({ ...formData, customer_id: e.target.value, customer_name: c?.name || '' })
-              }} disabled={Boolean(formData.sale_id)} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50 disabled:opacity-60">
-                <option value="">Walk-in Customer</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <CustomerSearchSelect
+                customers={customers}
+                value={formData.customer_id}
+                onChange={(customerId) => {
+                  const c = customers.find((x) => x.id === customerId)
+                  setFormData({ ...formData, customer_id: customerId, customer_name: c?.name || '' })
+                }}
+                disabled={Boolean(formData.sale_id)}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50 disabled:opacity-60"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Reason</label>
