@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Trash2, Printer } from 'lucide-react'
+import { Trash2, Printer, Pencil } from 'lucide-react'
 
 export function MakePayment() {
   const { id } = useParams()
@@ -16,6 +16,15 @@ export function MakePayment() {
 
   const [newPayment, setNewPayment] = useState({
     payment_date: new Date().toISOString().split('T')[0],
+    amount: '',
+    payment_method: 'bank_transfer',
+    reference: '',
+    notes: '',
+  })
+
+  const [editingPayment, setEditingPayment] = useState(null)
+  const [editForm, setEditForm] = useState({
+    payment_date: '',
     amount: '',
     payment_method: 'bank_transfer',
     reference: '',
@@ -114,6 +123,72 @@ export function MakePayment() {
     } catch (error) {
       console.error('Error making payment:', error)
       alert('Failed to record payment. Make sure the po_payments table exists (run the migration).')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const isEditablePayment = (p) => p.payment_method !== 'debit_note'
+
+  const handleStartEdit = (payment) => {
+    setEditForm({
+      payment_date: payment.payment_date,
+      amount: String(payment.amount),
+      payment_method: payment.payment_method,
+      reference: payment.reference || '',
+      notes: payment.notes || '',
+    })
+    setEditingPayment(payment)
+  }
+
+  const handleCancelEdit = () => setEditingPayment(null)
+
+  const handleUpdatePayment = async () => {
+    const newAmount = parseFloat(editForm.amount) || 0
+    if (newAmount <= 0) {
+      alert('Amount must be greater than zero')
+      return
+    }
+    const originalAmount = parseFloat(editingPayment.amount) || 0
+    const maxAmount = balance + originalAmount
+    if (newAmount > maxAmount + 0.01) {
+      alert(`Amount cannot exceed ${formatCurrency(maxAmount)}`)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const { data: updated, error } = await supabase
+        .from('po_payments')
+        .update({
+          payment_date: editForm.payment_date,
+          amount: newAmount,
+          payment_method: editForm.payment_method,
+          reference: editForm.reference || null,
+          notes: editForm.notes || null,
+        })
+        .eq('id', editingPayment.id)
+        .select()
+        .single()
+      if (error) throw error
+
+      const delta = newAmount - originalAmount
+      const newTotalPaid = Math.max(0, parseFloat(order.amount_paid) + delta)
+      const newBalance = parseFloat(order.grand_total) - newTotalPaid
+      const newStatus = newBalance <= 0.01 ? 'paid' : newTotalPaid > 0 ? 'partial' : 'unpaid'
+
+      const { error: poError } = await supabase
+        .from('purchase_orders')
+        .update({ payment_status: newStatus, amount_paid: newTotalPaid })
+        .eq('id', id)
+      if (poError) throw poError
+
+      setPayments(payments.map((p) => (p.id === updated.id ? updated : p)))
+      setOrder({ ...order, payment_status: newStatus, amount_paid: newTotalPaid })
+      setEditingPayment(null)
+    } catch (error) {
+      console.error('Error updating payment:', error)
+      alert('Failed to update payment')
     } finally {
       setSaving(false)
     }
@@ -265,6 +340,51 @@ export function MakePayment() {
                 cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque', debit_note: 'Debit Note',
               }
               const isAdjustment = payment.payment_method === 'debit_note'
+              const isEditingThis = editingPayment?.id === payment.id
+              const editMaxAmount = balance + parseFloat(payment.amount || 0)
+
+              if (isEditingThis) {
+                return (
+                  <div key={payment.id} className="bg-zinc-800/40 border border-teal-600/40 rounded-lg p-3">
+                    <p className="text-xs text-zinc-400 mb-3">
+                      Editing payment {payment.receipt_number ? <span className="text-teal-400">{payment.receipt_number}</span> : 'entry'}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Date</label>
+                        <input type="date" value={editForm.payment_date} onChange={(e) => setEditForm({ ...editForm, payment_date: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg text-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Amount (QAR) — max {formatCurrency(editMaxAmount)}</label>
+                        <input type="number" min="0.01" step="0.01" max={editMaxAmount} value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg text-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Method</label>
+                        <select value={editForm.payment_method} onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg text-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+                          <option value="bank_transfer">Bank Transfer</option>
+                          <option value="cash">Cash</option>
+                          <option value="cheque">Cheque</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Reference #</label>
+                        <input type="text" value={editForm.reference} onChange={(e) => setEditForm({ ...editForm, reference: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg text-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs text-zinc-400 mb-1">Notes</label>
+                        <input type="text" value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg text-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 mt-3">
+                      <button onClick={handleCancelEdit} className="px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200">Cancel</button>
+                      <button onClick={handleUpdatePayment} disabled={saving} className="px-4 py-1.5 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-lg hover:from-teal-500 hover:to-teal-400 disabled:opacity-50 text-sm">
+                        {saving ? 'Saving...' : 'Save Changes'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              }
+
               return (
                 <div key={payment.id} className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3">
                   <div className="flex-1">
@@ -289,8 +409,13 @@ export function MakePayment() {
                         <Printer className="w-4 h-4" />
                       </Link>
                     )}
+                    {!isEmployee && isEditablePayment(payment) && (
+                      <button onClick={() => handleStartEdit(payment)} title="Edit payment" className="text-zinc-400 hover:text-teal-400">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    )}
                     {!isEmployee && (
-                      <button onClick={() => handleDeletePayment(payment.id)} className="text-red-400 hover:text-red-300">
+                      <button onClick={() => handleDeletePayment(payment.id)} title="Delete payment" className="text-red-400 hover:text-red-300">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
