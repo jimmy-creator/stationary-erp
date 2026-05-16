@@ -8,6 +8,7 @@ export function DailyCash() {
   const [salesData, setSalesData] = useState([])
   const [expensesData, setExpensesData] = useState([])
   const [collectionsData, setCollectionsData] = useState([])
+  const [openingCollectionsData, setOpeningCollectionsData] = useState([])
   const [poPaymentsData, setPoPaymentsData] = useState([])
   const [viewMode, setViewMode] = useState('daily') // 'daily' or 'range'
   const [dateRange, setDateRange] = useState({
@@ -29,7 +30,7 @@ export function DailyCash() {
       setLoading(true)
       const { from, to } = getDateFilter()
 
-      const [salesRes, expensesRes, collectionsRes, poPaymentsRes] = await Promise.all([
+      const [salesRes, expensesRes, collectionsRes, openingCollectionsRes, poPaymentsRes] = await Promise.all([
         // Sales for the date(s)
         supabase
           .from('sales')
@@ -57,6 +58,16 @@ export function DailyCash() {
           .then(res => res)
           .catch(() => ({ data: [], error: null })),
 
+        // Opening-balance collections for the date(s)
+        supabase
+          .from('customer_payments')
+          .select('id, customer_id, amount, payment_method, payment_date, reference, customers!customer_id(name)')
+          .gte('payment_date', from)
+          .lte('payment_date', to)
+          .order('created_at', { ascending: false })
+          .then(res => res)
+          .catch(() => ({ data: [], error: null })),
+
         // PO payments for the date(s)
         supabase
           .from('po_payments')
@@ -71,6 +82,7 @@ export function DailyCash() {
       setSalesData(salesRes.data || [])
       setExpensesData(expensesRes.data || [])
       setCollectionsData(collectionsRes.data || [])
+      setOpeningCollectionsData(openingCollectionsRes.data || [])
       setPoPaymentsData(poPaymentsRes.data || [])
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -110,6 +122,18 @@ export function DailyCash() {
     .filter((c) => c.payment_method === 'bank_transfer')
     .reduce((sum, c) => sum + parseFloat(c.amount || 0), 0)
 
+  const cashOpeningCollections = openingCollectionsData
+    .filter((c) => c.payment_method === 'cash')
+    .reduce((sum, c) => sum + parseFloat(c.amount || 0), 0)
+
+  const cardOpeningCollections = openingCollectionsData
+    .filter((c) => c.payment_method === 'card')
+    .reduce((sum, c) => sum + parseFloat(c.amount || 0), 0)
+
+  const bankOpeningCollections = openingCollectionsData
+    .filter((c) => c.payment_method === 'bank_transfer')
+    .reduce((sum, c) => sum + parseFloat(c.amount || 0), 0)
+
   // Calculate cash out
   const cashExpenses = expensesData
     .filter((e) => e.payment_method === 'cash')
@@ -128,21 +152,31 @@ export function DailyCash() {
     .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
 
   // Totals
-  const totalCashIn = cashSales + cashCollections
+  const totalCashIn = cashSales + cashCollections + cashOpeningCollections
   const totalCashOut = cashExpenses + cashPOPayments
   const netCash = totalCashIn - totalCashOut
 
-  const totalBankIn = bankSales + cardSales + bankCollections + cardCollections
+  const totalBankIn =
+    bankSales + cardSales + bankCollections + cardCollections + bankOpeningCollections + cardOpeningCollections
   const totalBankOut = bankExpenses + bankPOPayments
   const netBank = totalBankIn - totalBankOut
 
   const totalSalesRevenue = salesData.reduce((sum, s) => sum + parseFloat(s.grand_total || 0), 0)
   const totalSalesReceived = salesData.reduce((sum, s) => sum + parseFloat(s.amount_paid || 0), 0)
   const totalExpenses = expensesData.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0)
-  const totalCollections = collectionsData.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0)
+  // Only count money-in collections (cash/card/bank) — discount and credit_note
+  // rows are paper adjustments that reduce AR without bringing cash in.
+  const realCollections = collectionsData.filter(
+    (c) => c.payment_method === 'cash' || c.payment_method === 'card' || c.payment_method === 'bank_transfer'
+  )
+  const totalCollections = realCollections.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0)
+  const realOpeningCollections = openingCollectionsData.filter(
+    (c) => c.payment_method === 'cash' || c.payment_method === 'card' || c.payment_method === 'bank_transfer'
+  )
+  const totalOpeningCollections = realOpeningCollections.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0)
   const totalPOPayments = poPaymentsData.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
 
-  const totalIn = totalSalesReceived + totalCollections
+  const totalIn = totalSalesReceived + totalCollections + totalOpeningCollections
   const totalOut = totalExpenses + totalPOPayments
   const netTotal = totalIn - totalOut
 
@@ -210,7 +244,7 @@ export function DailyCash() {
               <ArrowUpRight className="w-5 h-5 text-green-400" />
             </div>
             <div>
-              <p className="text-xs text-zinc-500">Total In</p>
+              <p className="text-xs text-zinc-500">Total Income</p>
               <p className="text-lg font-bold text-green-400">{formatCurrency(totalIn)}</p>
             </div>
           </div>
@@ -221,7 +255,7 @@ export function DailyCash() {
               <ArrowDownRight className="w-5 h-5 text-red-400" />
             </div>
             <div>
-              <p className="text-xs text-zinc-500">Total Out</p>
+              <p className="text-xs text-zinc-500">Total Expenses</p>
               <p className="text-lg font-bold text-red-400">{formatCurrency(totalOut)}</p>
             </div>
           </div>
@@ -260,6 +294,7 @@ export function DailyCash() {
           <div className="space-y-3">
             <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Sales</span><span className="text-green-400">+{formatCurrency(cashSales)}</span></div>
             {cashCollections > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Collections</span><span className="text-green-400">+{formatCurrency(cashCollections)}</span></div>}
+            {cashOpeningCollections > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Opening Balance Collections</span><span className="text-green-400">+{formatCurrency(cashOpeningCollections)}</span></div>}
             {cashExpenses > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Expenses</span><span className="text-red-400">-{formatCurrency(cashExpenses)}</span></div>}
             {cashPOPayments > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Supplier Payments</span><span className="text-red-400">-{formatCurrency(cashPOPayments)}</span></div>}
             <div className={`flex justify-between text-sm font-bold border-t border-zinc-800 pt-2 ${netCash >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -277,6 +312,7 @@ export function DailyCash() {
             {cardSales > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Card Sales</span><span className="text-green-400">+{formatCurrency(cardSales)}</span></div>}
             {bankSales > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Bank Transfer Sales</span><span className="text-green-400">+{formatCurrency(bankSales)}</span></div>}
             {(cardCollections + bankCollections) > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Bank/Card Collections</span><span className="text-green-400">+{formatCurrency(cardCollections + bankCollections)}</span></div>}
+            {(cardOpeningCollections + bankOpeningCollections) > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Opening Balance Collections</span><span className="text-green-400">+{formatCurrency(cardOpeningCollections + bankOpeningCollections)}</span></div>}
             {bankExpenses > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Bank Expenses</span><span className="text-red-400">-{formatCurrency(bankExpenses)}</span></div>}
             {bankPOPayments > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Bank Supplier Payments</span><span className="text-red-400">-{formatCurrency(bankPOPayments)}</span></div>}
             <div className={`flex justify-between text-sm font-bold border-t border-zinc-800 pt-2 ${netBank >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -323,18 +359,40 @@ export function DailyCash() {
           </div>
         )}
 
-        {/* Collections */}
-        {collectionsData.length > 0 && (
+        {/* Collections — exclude paper adjustments (discount, credit note) so this stays a cash-in view */}
+        {realCollections.length > 0 && (
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
             <h3 className="text-sm font-medium text-zinc-400 uppercase mb-3">
-              Payment Collections ({collectionsData.length})
+              Payment Collections ({realCollections.length})
               <span className="ml-2 text-green-400">{formatCurrency(totalCollections)}</span>
             </h3>
             <div className="space-y-2">
-              {collectionsData.map((c) => (
+              {realCollections.map((c) => (
                 <div key={c.id} className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-zinc-300">Collection</span>
+                    <span className="px-2 py-0.5 text-xs rounded-full bg-zinc-800 text-zinc-400">{paymentMethodLabels[c.payment_method]}</span>
+                    {c.reference && <span className="text-xs text-zinc-500">Ref: {c.reference}</span>}
+                  </div>
+                  <span className="font-medium text-green-400">+{formatCurrency(c.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Opening-balance collections (customer_payments) — settles AR from onboarding */}
+        {realOpeningCollections.length > 0 && (
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+            <h3 className="text-sm font-medium text-zinc-400 uppercase mb-3">
+              Opening Balance Collections ({realOpeningCollections.length})
+              <span className="ml-2 text-green-400">{formatCurrency(totalOpeningCollections)}</span>
+            </h3>
+            <div className="space-y-2">
+              {realOpeningCollections.map((c) => (
+                <div key={c.id} className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-zinc-300">{c.customers?.name || 'Customer'}</span>
                     <span className="px-2 py-0.5 text-xs rounded-full bg-zinc-800 text-zinc-400">{paymentMethodLabels[c.payment_method]}</span>
                     {c.reference && <span className="text-xs text-zinc-500">Ref: {c.reference}</span>}
                   </div>
@@ -392,7 +450,7 @@ export function DailyCash() {
         )}
 
         {/* Empty State */}
-        {salesData.length === 0 && expensesData.length === 0 && collectionsData.length === 0 && poPaymentsData.length === 0 && (
+        {salesData.length === 0 && expensesData.length === 0 && collectionsData.length === 0 && openingCollectionsData.length === 0 && poPaymentsData.length === 0 && (
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
             No transactions for this {viewMode === 'daily' ? 'date' : 'period'}.
           </div>

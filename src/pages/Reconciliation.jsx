@@ -49,6 +49,7 @@ export function Reconciliation() {
       const [
         salesRes,
         salePaymentsRes,
+        customerPaymentsRes,
         expensesRes,
         poPaymentsRes,
         purchaseOrdersRes,
@@ -61,6 +62,12 @@ export function Reconciliation() {
         supabase.from('sale_payments')
           .select('amount, payment_method')
           .gte('payment_date', from).lte('payment_date', to),
+
+        supabase.from('customer_payments')
+          .select('amount, payment_method')
+          .gte('payment_date', from).lte('payment_date', to)
+          .then(res => res)
+          .catch(() => ({ data: [], error: null })),
 
         supabase.from('expenses')
           .select('amount, payment_method')
@@ -76,11 +83,12 @@ export function Reconciliation() {
           .gte('po_date', from).lte('po_date', to),
       ])
 
-      const sales        = salesRes.data || []
-      const salePayments = salePaymentsRes.data || []
-      const expenses     = expensesRes.data || []
-      const poPayments   = poPaymentsRes.data || []
-      const purchaseOrders = purchaseOrdersRes.data || []
+      const sales            = salesRes.data || []
+      const salePayments     = salePaymentsRes.data || []
+      const customerPayments = customerPaymentsRes.data || []
+      const expenses         = expensesRes.data || []
+      const poPayments       = poPaymentsRes.data || []
+      const purchaseOrders   = purchaseOrdersRes.data || []
 
       // ── CHECK 1: Sales breakdown by payment method ──
       const totalSalesInvoiced = sumField(sales, 'grand_total')
@@ -110,15 +118,16 @@ export function Reconciliation() {
       })
 
       // ── CHECK 4: Cash flow reconciliation ──
-      // Cash in = cash sales received + cash collections
-      const cashSalesReceived     = sumFieldWhere(sales, 'amount_paid', 'payment_method', 'cash')
-      const cashCollections       = sumFieldWhere(salePayments, 'amount', 'payment_method', 'cash')
-      const cashIn                = cashSalesReceived + cashCollections
+      // Cash in = cash sales received + cash collections (sale + opening balance)
+      const cashSalesReceived       = sumFieldWhere(sales, 'amount_paid', 'payment_method', 'cash')
+      const cashCollections         = sumFieldWhere(salePayments, 'amount', 'payment_method', 'cash')
+      const cashOpeningCollections  = sumFieldWhere(customerPayments, 'amount', 'payment_method', 'cash')
+      const cashIn                  = cashSalesReceived + cashCollections + cashOpeningCollections
       // Cash out = cash expenses + cash PO payments
-      const cashExpenses          = sumFieldWhere(expenses, 'amount', 'payment_method', 'cash')
-      const cashPOPayments        = sumFieldWhere(poPayments, 'amount', 'payment_method', 'cash')
-      const cashOut               = cashExpenses + cashPOPayments
-      const netCash               = cashIn - cashOut
+      const cashExpenses            = sumFieldWhere(expenses, 'amount', 'payment_method', 'cash')
+      const cashPOPayments          = sumFieldWhere(poPayments, 'amount', 'payment_method', 'cash')
+      const cashOut                 = cashExpenses + cashPOPayments
+      const netCash                 = cashIn - cashOut
 
       // ── CHECK 5: AP reconciliation ──
       const totalPOInvoiced  = sumField(purchaseOrders, 'grand_total')
@@ -134,7 +143,7 @@ export function Reconciliation() {
         sales: { total: totalSalesInvoiced, received: totalReceived, cash: cashSalesInvoiced, card: cardSalesInvoiced, bank: bankSalesInvoiced, credit: creditSalesInvoiced, methodSum },
         ar: { expected: expectedAR, actual: actualAR },
         subtotal: { totalDiff: check3Diff, count: sales.length },
-        cash: { cashSalesReceived, cashCollections, cashIn, cashExpenses, cashPOPayments, cashOut, netCash },
+        cash: { cashSalesReceived, cashCollections, cashOpeningCollections, cashIn, cashExpenses, cashPOPayments, cashOut, netCash },
         ap: { expected: expectedAP, actual: actualAP, totalInvoiced: totalPOInvoiced, totalPaid: totalPOPaid },
         checks: {
           salesBreakdown: check1Diff,
@@ -315,6 +324,10 @@ export function Reconciliation() {
               <div className="bg-zinc-900/50 rounded-lg p-3">
                 <p className="text-zinc-500 text-xs mb-1">Cash Collections (AR payments)</p>
                 <p className="text-green-400">+{fmt(data.cash.cashCollections)}</p>
+              </div>
+              <div className="bg-zinc-900/50 rounded-lg p-3">
+                <p className="text-zinc-500 text-xs mb-1">Opening Balance Collections</p>
+                <p className="text-green-400">+{fmt(data.cash.cashOpeningCollections)}</p>
               </div>
               <div className="bg-zinc-900/50 rounded-lg p-3">
                 <p className="text-zinc-500 text-xs mb-1">Total Cash In</p>
