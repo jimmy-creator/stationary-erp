@@ -23,7 +23,7 @@ export function AccountsReceivable() {
       setLoading(true)
       let query = supabase
         .from('sales')
-        .select('*, payments:sale_payments(*)')
+        .select('*')
         .in('payment_status', ['unpaid', 'partial'])
         .eq('status', 'completed')
         .order('sale_date', { ascending: false })
@@ -36,39 +36,52 @@ export function AccountsReceivable() {
       if (error) throw error
 
       const salesWithBalance = (data || []).map((sale) => {
-        const totalPaid = (sale.payments || []).reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) + parseFloat(sale.amount_paid || 0)
+        const totalPaid = parseFloat(sale.amount_paid || 0)
         const balance = parseFloat(sale.grand_total || 0) - totalPaid
         const daysOverdue = Math.floor((new Date() - new Date(sale.sale_date)) / (1000 * 60 * 60 * 24))
         return { ...sale, total_paid: totalPaid, balance: Math.max(0, balance), days_overdue: daysOverdue }
       })
 
-      setSales(salesWithBalance)
+      // Pull in customers carrying an opening balance owed to us and surface
+      // them as synthetic rows so totals match the customer statement.
+      let customerQuery = supabase
+        .from('customers')
+        .select('id, name, opening_balance, opening_balance_date')
+        .gt('opening_balance', 0)
+        .not('opening_balance_date', 'is', null)
+
+      if (debouncedSearch) {
+        customerQuery = customerQuery.ilike('name', `%${debouncedSearch}%`)
+      }
+
+      const { data: openingCustomers } = await customerQuery
+      const openingRows = (openingCustomers || []).map((c) => {
+        const amount = parseFloat(c.opening_balance || 0)
+        const daysOverdue = Math.floor((new Date() - new Date(c.opening_balance_date)) / (1000 * 60 * 60 * 24))
+        return {
+          id: `opening-${c.id}`,
+          invoice_number: 'Opening Balance',
+          sale_date: c.opening_balance_date,
+          customer_id: c.id,
+          customer_name: c.name,
+          grand_total: amount,
+          amount_paid: 0,
+          total_paid: 0,
+          balance: amount,
+          payment_status: 'unpaid',
+          status: 'completed',
+          days_overdue: daysOverdue,
+          is_opening: true,
+        }
+      })
+
+      const merged = [...openingRows, ...salesWithBalance].sort(
+        (a, b) => new Date(b.sale_date) - new Date(a.sale_date)
+      )
+
+      setSales(merged)
     } catch (error) {
       console.error('Error fetching receivables:', error)
-      // If sale_payments table doesn't exist, fetch without it
-      try {
-        let query = supabase
-          .from('sales')
-          .select('*')
-          .in('payment_status', ['unpaid', 'partial'])
-          .eq('status', 'completed')
-          .order('sale_date', { ascending: false })
-
-        if (debouncedSearch) {
-          query = query.or(`invoice_number.ilike.%${debouncedSearch}%,customer_name.ilike.%${debouncedSearch}%`)
-        }
-
-        const { data } = await query
-        const salesWithBalance = (data || []).map((sale) => {
-          const totalPaid = parseFloat(sale.amount_paid || 0)
-          const balance = parseFloat(sale.grand_total || 0) - totalPaid
-          const daysOverdue = Math.floor((new Date() - new Date(sale.sale_date)) / (1000 * 60 * 60 * 24))
-          return { ...sale, total_paid: totalPaid, balance: Math.max(0, balance), days_overdue: daysOverdue, payments: [] }
-        })
-        setSales(salesWithBalance)
-      } catch (err) {
-        console.error('Fallback error:', err)
-      }
     } finally {
       setLoading(false)
     }
@@ -350,12 +363,22 @@ export function AccountsReceivable() {
                 {filteredSales.map((sale) => (
                   <tr key={sale.id} className="hover:bg-zinc-800/50">
                     <td className="px-6 py-4">
-                      <Link to={`/sales/${sale.id}`} className="text-sm font-medium text-teal-400 hover:text-teal-300">
-                        {sale.invoice_number}
-                      </Link>
+                      {sale.is_opening ? (
+                        <span className="text-sm font-medium text-amber-400">{sale.invoice_number}</span>
+                      ) : (
+                        <Link to={`/sales/${sale.id}`} className="text-sm font-medium text-teal-400 hover:text-teal-300">
+                          {sale.invoice_number}
+                        </Link>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-zinc-400">{formatDate(sale.sale_date)}</td>
-                    <td className="px-6 py-4 text-sm text-zinc-300">{sale.customer_name || 'Walk-in'}</td>
+                    <td className="px-6 py-4 text-sm text-zinc-300">
+                      {sale.is_opening ? (
+                        <Link to={`/customers/${sale.customer_id}`} className="text-zinc-300 hover:text-teal-400">{sale.customer_name}</Link>
+                      ) : (
+                        sale.customer_name || 'Walk-in'
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                         sale.payment_status === 'unpaid' ? 'bg-red-900/50 text-red-400' : 'bg-yellow-900/50 text-yellow-400'
@@ -372,9 +395,11 @@ export function AccountsReceivable() {
                     <td className="px-6 py-4 text-sm text-green-400 text-right">{formatCurrency(sale.total_paid)}</td>
                     <td className="px-6 py-4 text-sm font-bold text-red-400 text-right">{formatCurrency(sale.balance)}</td>
                     <td className="px-6 py-4 text-sm">
-                      <Link to={`/accounts-receivable/${sale.id}/collect`} className="text-teal-400 hover:text-teal-300">
-                        Collect
-                      </Link>
+                      {!sale.is_opening && (
+                        <Link to={`/accounts-receivable/${sale.id}/collect`} className="text-teal-400 hover:text-teal-300">
+                          Collect
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -405,7 +430,11 @@ export function AccountsReceivable() {
               <div key={sale.id} className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <Link to={`/sales/${sale.id}`} className="font-medium text-teal-400">{sale.invoice_number}</Link>
+                    {sale.is_opening ? (
+                      <span className="font-medium text-amber-400">{sale.invoice_number}</span>
+                    ) : (
+                      <Link to={`/sales/${sale.id}`} className="font-medium text-teal-400">{sale.invoice_number}</Link>
+                    )}
                     <p className="text-xs text-zinc-500">{formatDate(sale.sale_date)}</p>
                   </div>
                   <div className="flex gap-2">
@@ -425,9 +454,11 @@ export function AccountsReceivable() {
                   <div><p className="text-xs text-zinc-500">Paid</p><p className="text-sm text-green-400">{formatCurrency(sale.total_paid)}</p></div>
                   <div><p className="text-xs text-zinc-500">Balance</p><p className="text-sm font-bold text-red-400">{formatCurrency(sale.balance)}</p></div>
                 </div>
-                <Link to={`/accounts-receivable/${sale.id}/collect`} className="block w-full text-center py-2 bg-teal-600/20 border border-teal-500/30 rounded-lg text-sm text-teal-400 hover:bg-teal-600/30 transition-colors">
-                  Collect Payment
-                </Link>
+                {!sale.is_opening && (
+                  <Link to={`/accounts-receivable/${sale.id}/collect`} className="block w-full text-center py-2 bg-teal-600/20 border border-teal-500/30 rounded-lg text-sm text-teal-400 hover:bg-teal-600/30 transition-colors">
+                    Collect Payment
+                  </Link>
+                )}
               </div>
             ))}
           </div>
