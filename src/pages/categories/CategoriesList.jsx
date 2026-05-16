@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { SearchInput } from '../../components/SearchInput'
 import { useDebounce } from '../../hooks/useDebounce'
 
 export function CategoriesList() {
+  const { isEmployee } = useAuth()
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -83,8 +85,8 @@ export function CategoriesList() {
                   <td className="px-6 py-4 text-sm font-medium text-white">{cat.name}</td>
                   <td className="px-6 py-4 text-sm text-zinc-400">{cat.description || '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
-                    <Link to={`/categories/${cat.id}/edit`} className="text-teal-400 hover:text-teal-300">Edit</Link>
-                    <button onClick={() => handleDelete(cat.id, cat.name)} className="text-red-400 hover:text-red-300">Delete</button>
+                    {!isEmployee && <Link to={`/categories/${cat.id}/edit`} className="text-teal-400 hover:text-teal-300">Edit</Link>}
+                    {!isEmployee && <button onClick={() => handleDelete(cat.id, cat.name)} className="text-red-400 hover:text-red-300">Delete</button>}
                   </td>
                 </tr>
               ))}

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { Trash2, Printer } from 'lucide-react'
 
 export function CollectPayment() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isEmployee } = useAuth()
 
   const [sale, setSale] = useState(null)
   const [payments, setPayments] = useState([])
@@ -364,9 +366,11 @@ export function CollectPayment() {
                         <Printer className="w-4 h-4" />
                       </Link>
                     )}
-                    <button onClick={() => handleDeletePayment(payment.id, payment.amount)} className="text-red-400 hover:text-red-300">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {!isEmployee && (
+                      <button onClick={() => handleDeletePayment(payment.id, payment.amount)} className="text-red-400 hover:text-red-300">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               )

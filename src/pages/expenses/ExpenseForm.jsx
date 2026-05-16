@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 
 export function ExpenseForm() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isEmployee } = useAuth()
   const isEditing = Boolean(id)
 
   const [loading, setLoading] = useState(false)
@@ -165,7 +167,7 @@ export function ExpenseForm() {
         <Link to="/expenses" className="text-teal-600 hover:underline text-sm mb-2 inline-block">&larr; Back to list</Link>
         <div className="flex justify-between items-center">
           <h1 className="text-xl lg:text-2xl font-bold text-white">{isEditing ? 'Edit Expense' : 'Add Expense'}</h1>
-          {isEditing && (
+          {isEditing && !isEmployee && (
             <button type="button" onClick={() => setShowDeleteModal(true)} className="px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl hover:bg-red-500/20">Delete</button>
           )}
         </div>

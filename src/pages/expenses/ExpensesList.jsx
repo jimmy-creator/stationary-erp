@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { SearchInput } from '../../components/SearchInput'
 import { useDebounce } from '../../hooks/useDebounce'
 import { useExpenseCategories, CATEGORY_COLOR_CLASSES } from '../../hooks/useExpenseCategories'
@@ -9,6 +10,7 @@ const PAGE_SIZE = 20
 
 // ── Manage Categories Modal ────────────────────────────────────────────────────
 function ManageCategoriesModal({ onClose }) {
+  const { isEmployee } = useAuth()
   const { categories, addCategory, deleteCategory } = useExpenseCategories()
   const [newLabel, setNewLabel] = useState('')
   const [saving, setSaving] = useState(false)
@@ -80,13 +82,15 @@ function ManageCategoriesModal({ onClose }) {
                   {cat.label}
                 </span>
               </div>
-              <button
-                onClick={() => handleDelete(cat.id)}
-                disabled={deletingId === cat.id}
-                className="text-xs text-red-500 hover:text-red-400 disabled:opacity-40"
-              >
-                {deletingId === cat.id ? 'Removing…' : 'Remove'}
-              </button>
+              {!isEmployee && (
+                <button
+                  onClick={() => handleDelete(cat.id)}
+                  disabled={deletingId === cat.id}
+                  className="text-xs text-red-500 hover:text-red-400 disabled:opacity-40"
+                >
+                  {deletingId === cat.id ? 'Removing…' : 'Remove'}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -101,6 +105,7 @@ function ManageCategoriesModal({ onClose }) {
 
 // ── Main List Component ────────────────────────────────────────────────────────
 export function ExpensesList() {
+  const { isEmployee } = useAuth()
   const [expenses, setExpenses] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -291,7 +296,7 @@ export function ExpensesList() {
                       <td className="px-6 py-4 text-sm text-zinc-400">{expense.vendor || '-'}</td>
                       <td className="px-6 py-4 text-sm text-zinc-400">{paymentMethodLabels[expense.payment_method] || expense.payment_method}</td>
                       <td className="px-6 py-4 text-sm font-medium text-zinc-200 text-right">{formatCurrency(expense.amount)}</td>
-                      <td className="px-6 py-4 text-sm"><Link to={`/expenses/${expense.id}/edit`} className="text-teal-400 hover:text-teal-300">Edit</Link></td>
+                      <td className="px-6 py-4 text-sm">{!isEmployee && <Link to={`/expenses/${expense.id}/edit`} className="text-teal-400 hover:text-teal-300">Edit</Link>}</td>
                     </tr>
                   )
                 })}
@@ -302,8 +307,10 @@ export function ExpensesList() {
           <div className="md:hidden space-y-4">
             {expenses.map((expense) => {
               const cat = categoryMap[expense.category]
+              const Wrapper = isEmployee ? 'div' : Link
+              const wrapperProps = isEmployee ? {} : { to: `/expenses/${expense.id}/edit` }
               return (
-                <Link key={expense.id} to={`/expenses/${expense.id}/edit`} className="block bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 hover:bg-zinc-800/50 transition-colors">
+                <Wrapper key={expense.id} {...wrapperProps} className="block bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 hover:bg-zinc-800/50 transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-sm text-zinc-500">{formatDate(expense.expense_date)}</span>
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${cat?.class || 'bg-zinc-800 text-zinc-300'}`}>
@@ -315,7 +322,7 @@ export function ExpensesList() {
                     <span className="text-sm text-zinc-500">{paymentMethodLabels[expense.payment_method]}</span>
                     <span className="font-bold text-zinc-200">{formatCurrency(expense.amount)}</span>
                   </div>
-                </Link>
+                </Wrapper>
               )
             })}
           </div>

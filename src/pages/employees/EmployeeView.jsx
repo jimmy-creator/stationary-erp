@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { Mail, Phone, Briefcase, CreditCard } from 'lucide-react'
 
 export function EmployeeView() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isEmployee } = useAuth()
   const [employee, setEmployee] = useState(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
@@ -70,8 +72,8 @@ export function EmployeeView() {
           <p className="text-zinc-500">{employee.employee_number}</p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <Link to={`/employees/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>
-          <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>
+          {!isEmployee && <Link to={`/employees/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>}
+          {!isEmployee && <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>}
         </div>
       </div>
 

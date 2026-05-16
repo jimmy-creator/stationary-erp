@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { User, Phone, Mail, MapPin, Printer } from 'lucide-react'
 import { useStoreSettings } from '../../hooks/useStoreSettings'
 
@@ -25,6 +26,7 @@ const PAYMENT_METHOD_LABELS = {
 export function CustomerView() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isEmployee } = useAuth()
   const { settings: store } = useStoreSettings()
   const [customer, setCustomer] = useState(null)
   const [sales, setSales] = useState([])
@@ -311,8 +313,8 @@ export function CustomerView() {
           <h1 className="text-xl lg:text-2xl font-bold text-white">{customer.name}</h1>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <Link to={`/customers/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>
-          <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>
+          {!isEmployee && <Link to={`/customers/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>}
+          {!isEmployee && <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>}
         </div>
       </div>
 

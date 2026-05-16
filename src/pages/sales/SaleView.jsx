@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { useStoreSettings } from '../../hooks/useStoreSettings'
 
 // ─── Number to words (for invoice footer) ────────────────────────────────────
@@ -50,6 +51,7 @@ const LIGHT_GRAY = '#666666' // for least-important secondary text
 export function SaleView() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isEmployee } = useAuth()
   const { settings: store } = useStoreSettings()
   const [sale, setSale] = useState(null)
   const [items, setItems] = useState([])
@@ -150,8 +152,8 @@ export function SaleView() {
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Link to={`/sales-returns/new?sale_id=${id}`} className="flex-1 sm:flex-none text-center px-4 py-2 text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-md hover:bg-orange-500/20">Create Return</Link>
-          <Link to={`/sales/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>
-          <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>
+          {!isEmployee && <Link to={`/sales/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>}
+          {!isEmployee && <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>}
           <button onClick={() => window.print()} className="flex-1 sm:flex-none px-4 py-2 text-zinc-300 bg-zinc-800 border border-zinc-700 rounded-md hover:bg-zinc-700">Print</button>
         </div>
       </div>

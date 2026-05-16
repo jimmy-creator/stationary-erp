@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { useStoreSettings } from '../../hooks/useStoreSettings'
 
 const fmt = (n) => `QR ${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
@@ -13,6 +14,7 @@ const GRAY = '#444444'
 export function SalesReturnView() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isEmployee } = useAuth()
   const { settings: store } = useStoreSettings()
   const [ret, setRet] = useState(null)
   const [items, setItems] = useState([])
@@ -147,8 +149,8 @@ export function SalesReturnView() {
           <h1 className="text-xl lg:text-2xl font-bold text-white">{ret.return_number}</h1>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <Link to={`/sales-returns/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>
-          <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>
+          {!isEmployee && <Link to={`/sales-returns/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>}
+          {!isEmployee && <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>}
           <button onClick={() => window.print()} className="flex-1 sm:flex-none px-4 py-2 text-zinc-300 bg-zinc-800 border border-zinc-700 rounded-md hover:bg-zinc-700">Print</button>
         </div>
       </div>
