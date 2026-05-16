@@ -31,6 +31,7 @@ export function CustomerView() {
   const [customer, setCustomer] = useState(null)
   const [sales, setSales] = useState([])
   const [payments, setPayments] = useState([])
+  const [openingPayments, setOpeningPayments] = useState([])
   const [returns, setReturns] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
@@ -67,6 +68,15 @@ export function CustomerView() {
       } else {
         setPayments([])
       }
+
+      // Standalone payments against the customer's opening balance, recorded
+      // outside any specific invoice.
+      const openingPaymentsRes = await supabase
+        .from('customer_payments')
+        .select('*')
+        .eq('customer_id', id)
+        .order('payment_date', { ascending: true })
+      setOpeningPayments(openingPaymentsRes.data || [])
 
       // Pull every completed return tied to this customer (whether or not a
       // parent sale was selected). Returns appear on the statement directly,
@@ -214,9 +224,28 @@ export function CustomerView() {
       }
     })
 
+    // Standalone collections against the customer's opening balance.
+    openingPayments.forEach((p) => {
+      const isDiscount = p.payment_method === 'discount'
+      rows.push({
+        date: p.payment_date,
+        sortKey: `${p.payment_date}_2_${p.id}_opening`,
+        type: isDiscount ? 'discount' : 'payment',
+        doc: p.receipt_number || 'Opening Balance',
+        description: isDiscount ? 'Opening balance write-off' : 'Opening balance payment',
+        method: p.payment_method,
+        reference: p.reference,
+        notes: p.notes,
+        parentInvoice: 'Opening Balance',
+        receiptNumber: p.receipt_number || null,
+        debit: 0,
+        credit: parseFloat(p.amount || 0),
+      })
+    })
+
     rows.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
     return rows
-  }, [sales, payments, returns])
+  }, [sales, payments, returns, openingPayments])
 
   // Pre-existing balance carried over from before any transactions in this
   // system. Positive = customer owed us; negative = we owed them. Always
@@ -269,11 +298,13 @@ export function CustomerView() {
       bucketize(total - paid, sale.sale_date)
     })
     const openingAmt = parseFloat(customer?.opening_balance || 0)
-    if (openingAmt > 0.01 && customer?.opening_balance_date) {
-      bucketize(openingAmt, customer.opening_balance_date)
+    const openingSettled = openingPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
+    const openingRemaining = openingAmt - openingSettled
+    if (openingRemaining > 0.01 && customer?.opening_balance_date) {
+      bucketize(openingRemaining, customer.opening_balance_date)
     }
     return buckets
-  }, [sales, customer])
+  }, [sales, customer, openingPayments])
 
   if (loading) {
     return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>

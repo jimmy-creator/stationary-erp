@@ -42,8 +42,9 @@ export function AccountsReceivable() {
         return { ...sale, total_paid: totalPaid, balance: Math.max(0, balance), days_overdue: daysOverdue }
       })
 
-      // Pull in customers carrying an opening balance owed to us and surface
-      // them as synthetic rows so totals match the customer statement.
+      // Pull in customers carrying an opening balance owed to us, net of any
+      // payments already collected against it, and surface them as synthetic
+      // rows so totals match the customer statement.
       let customerQuery = supabase
         .from('customers')
         .select('id, name, opening_balance, opening_balance_date')
@@ -55,25 +56,44 @@ export function AccountsReceivable() {
       }
 
       const { data: openingCustomers } = await customerQuery
-      const openingRows = (openingCustomers || []).map((c) => {
-        const amount = parseFloat(c.opening_balance || 0)
-        const daysOverdue = Math.floor((new Date() - new Date(c.opening_balance_date)) / (1000 * 60 * 60 * 24))
-        return {
-          id: `opening-${c.id}`,
-          invoice_number: 'Opening Balance',
-          sale_date: c.opening_balance_date,
-          customer_id: c.id,
-          customer_name: c.name,
-          grand_total: amount,
-          amount_paid: 0,
-          total_paid: 0,
-          balance: amount,
-          payment_status: 'unpaid',
-          status: 'completed',
-          days_overdue: daysOverdue,
-          is_opening: true,
-        }
-      })
+
+      const openingCustomerIds = (openingCustomers || []).map((c) => c.id)
+      const settledByCustomer = {}
+      if (openingCustomerIds.length) {
+        const { data: cps } = await supabase
+          .from('customer_payments')
+          .select('customer_id, amount')
+          .in('customer_id', openingCustomerIds)
+        ;(cps || []).forEach((p) => {
+          settledByCustomer[p.customer_id] =
+            (settledByCustomer[p.customer_id] || 0) + parseFloat(p.amount || 0)
+        })
+      }
+
+      const openingRows = (openingCustomers || [])
+        .map((c) => {
+          const total = parseFloat(c.opening_balance || 0)
+          const settled = settledByCustomer[c.id] || 0
+          const balance = total - settled
+          if (balance <= 0.01) return null
+          const daysOverdue = Math.floor((new Date() - new Date(c.opening_balance_date)) / (1000 * 60 * 60 * 24))
+          return {
+            id: `opening-${c.id}`,
+            invoice_number: 'Opening Balance',
+            sale_date: c.opening_balance_date,
+            customer_id: c.id,
+            customer_name: c.name,
+            grand_total: total,
+            amount_paid: settled,
+            total_paid: settled,
+            balance,
+            payment_status: settled > 0 ? 'partial' : 'unpaid',
+            status: 'completed',
+            days_overdue: daysOverdue,
+            is_opening: true,
+          }
+        })
+        .filter(Boolean)
 
       const merged = [...openingRows, ...salesWithBalance].sort(
         (a, b) => new Date(b.sale_date) - new Date(a.sale_date)
@@ -395,11 +415,14 @@ export function AccountsReceivable() {
                     <td className="px-6 py-4 text-sm text-green-400 text-right">{formatCurrency(sale.total_paid)}</td>
                     <td className="px-6 py-4 text-sm font-bold text-red-400 text-right">{formatCurrency(sale.balance)}</td>
                     <td className="px-6 py-4 text-sm">
-                      {!sale.is_opening && (
-                        <Link to={`/accounts-receivable/${sale.id}/collect`} className="text-teal-400 hover:text-teal-300">
-                          Collect
-                        </Link>
-                      )}
+                      <Link
+                        to={sale.is_opening
+                          ? `/accounts-receivable/opening/${sale.customer_id}/collect`
+                          : `/accounts-receivable/${sale.id}/collect`}
+                        className="text-teal-400 hover:text-teal-300"
+                      >
+                        Collect
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -454,11 +477,14 @@ export function AccountsReceivable() {
                   <div><p className="text-xs text-zinc-500">Paid</p><p className="text-sm text-green-400">{formatCurrency(sale.total_paid)}</p></div>
                   <div><p className="text-xs text-zinc-500">Balance</p><p className="text-sm font-bold text-red-400">{formatCurrency(sale.balance)}</p></div>
                 </div>
-                {!sale.is_opening && (
-                  <Link to={`/accounts-receivable/${sale.id}/collect`} className="block w-full text-center py-2 bg-teal-600/20 border border-teal-500/30 rounded-lg text-sm text-teal-400 hover:bg-teal-600/30 transition-colors">
-                    Collect Payment
-                  </Link>
-                )}
+                <Link
+                  to={sale.is_opening
+                    ? `/accounts-receivable/opening/${sale.customer_id}/collect`
+                    : `/accounts-receivable/${sale.id}/collect`}
+                  className="block w-full text-center py-2 bg-teal-600/20 border border-teal-500/30 rounded-lg text-sm text-teal-400 hover:bg-teal-600/30 transition-colors"
+                >
+                  Collect Payment
+                </Link>
               </div>
             ))}
           </div>

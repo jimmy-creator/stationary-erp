@@ -33,23 +33,46 @@ mkdir -p "$BACKUP_DIR"
 
 echo "Starting backup to $BACKUP_DIR..."
 
-# Tables to backup
+# Tables to backup. Grouped by domain for readability — order doesn't matter
+# for export but is roughly the dependency order so manual review is easier.
 TABLES=(
+  # Identity & settings
   "profiles"
+  "user_permissions"
+  "store_settings"
+
+  # Catalog
   "categories"
   "products"
+
+  # Counterparties
   "suppliers"
   "customers"
+  "customer_payments"
+
+  # Sales
   "sales"
   "sale_items"
   "sale_payments"
+
+  # Sales returns
+  "sales_returns"
+  "sales_return_items"
+
+  # Procurement
   "purchase_orders"
   "purchase_order_items"
   "po_payments"
+
+  # Purchase returns
+  "purchase_returns"
+  "purchase_return_items"
+
+  # Operations
   "expenses"
+  "expense_categories"
   "employees"
   "stock_adjustments"
-  "user_permissions"
 )
 
 # Export each table as JSON
