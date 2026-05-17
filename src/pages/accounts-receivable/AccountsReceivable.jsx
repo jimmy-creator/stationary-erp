@@ -21,10 +21,11 @@ export function AccountsReceivable() {
   const fetchData = async () => {
     try {
       setLoading(true)
+      // Load every completed sale (including paid) so the Settled filter has data.
+      // Default UI behaviour still hides fully-settled rows — see filteredSales.
       let query = supabase
         .from('sales')
         .select('*')
-        .in('payment_status', ['unpaid', 'partial'])
         .eq('status', 'completed')
         .order('sale_date', { ascending: false })
 
@@ -70,30 +71,28 @@ export function AccountsReceivable() {
         })
       }
 
-      const openingRows = (openingCustomers || [])
-        .map((c) => {
-          const total = parseFloat(c.opening_balance || 0)
-          const settled = settledByCustomer[c.id] || 0
-          const balance = total - settled
-          if (balance <= 0.01) return null
-          const daysOverdue = Math.floor((new Date() - new Date(c.opening_balance_date)) / (1000 * 60 * 60 * 24))
-          return {
-            id: `opening-${c.id}`,
-            invoice_number: 'Opening Balance',
-            sale_date: c.opening_balance_date,
-            customer_id: c.id,
-            customer_name: c.name,
-            grand_total: total,
-            amount_paid: settled,
-            total_paid: settled,
-            balance,
-            payment_status: settled > 0 ? 'partial' : 'unpaid',
-            status: 'completed',
-            days_overdue: daysOverdue,
-            is_opening: true,
-          }
-        })
-        .filter(Boolean)
+      const openingRows = (openingCustomers || []).map((c) => {
+        const total = parseFloat(c.opening_balance || 0)
+        const settled = settledByCustomer[c.id] || 0
+        const balance = Math.max(0, total - settled)
+        const daysOverdue = Math.floor((new Date() - new Date(c.opening_balance_date)) / (1000 * 60 * 60 * 24))
+        const paymentStatus = balance <= 0.01 ? 'paid' : settled > 0 ? 'partial' : 'unpaid'
+        return {
+          id: `opening-${c.id}`,
+          invoice_number: 'Opening Balance',
+          sale_date: c.opening_balance_date,
+          customer_id: c.id,
+          customer_name: c.name,
+          grand_total: total,
+          amount_paid: settled,
+          total_paid: settled,
+          balance,
+          payment_status: paymentStatus,
+          status: 'completed',
+          days_overdue: daysOverdue,
+          is_opening: true,
+        }
+      })
 
       const merged = [...openingRows, ...salesWithBalance].sort(
         (a, b) => new Date(b.sale_date) - new Date(a.sale_date)
@@ -113,17 +112,23 @@ export function AccountsReceivable() {
   const customers = [...new Set(sales.map((s) => s.customer_name).filter(Boolean))]
 
   const filteredSales = sales.filter((s) => {
+    // Default view hides fully-settled rows; the Settled option shows only them.
+    if (!filter.status && s.balance <= 0.01) return false
     if (filter.status === 'unpaid' && s.payment_status !== 'unpaid') return false
     if (filter.status === 'partial' && s.payment_status !== 'partial') return false
-    if (filter.status === 'overdue' && s.days_overdue <= 30) return false
+    if (filter.status === 'overdue' && (s.days_overdue <= 30 || s.balance <= 0.01)) return false
+    if (filter.status === 'settled' && s.balance > 0.01) return false
     if (filter.customer && s.customer_name !== filter.customer) return false
     return true
   })
 
-  const totalOutstanding = filteredSales.reduce((sum, s) => sum + s.balance, 0)
-  const totalUnpaid = sales.filter((s) => s.payment_status === 'unpaid').reduce((sum, s) => sum + s.balance, 0)
-  const totalPartial = sales.filter((s) => s.payment_status === 'partial').reduce((sum, s) => sum + s.balance, 0)
-  const overdueCount = sales.filter((s) => s.days_overdue > 30).length
+  // Summary cards always reflect outstanding-only totals, regardless of the
+  // active filter — switching to Settled shouldn't blank the top-of-page KPIs.
+  const outstandingSales = sales.filter((s) => s.balance > 0.01)
+  const totalOutstanding = outstandingSales.reduce((sum, s) => sum + s.balance, 0)
+  const totalUnpaid = outstandingSales.filter((s) => s.payment_status === 'unpaid').reduce((sum, s) => sum + s.balance, 0)
+  const totalPartial = outstandingSales.filter((s) => s.payment_status === 'partial').reduce((sum, s) => sum + s.balance, 0)
+  const overdueCount = outstandingSales.filter((s) => s.days_overdue > 30).length
 
   const getAgingClass = (days) => {
     if (days > 60) return 'bg-red-900/50 text-red-400'
@@ -310,10 +315,11 @@ export function AccountsReceivable() {
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-1">Status</label>
             <select value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500">
-              <option value="">All</option>
+              <option value="">Outstanding</option>
               <option value="unpaid">Unpaid</option>
               <option value="partial">Partial</option>
               <option value="overdue">Overdue (30d+)</option>
+              <option value="settled">Settled / Paid</option>
             </select>
           </div>
           <div>
@@ -359,7 +365,9 @@ export function AccountsReceivable() {
         <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
       ) : filteredSales.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
-          No outstanding receivables. All invoices are paid!
+          {filter.status === 'settled'
+            ? 'No settled invoices yet.'
+            : 'No outstanding receivables. All invoices are paid!'}
         </div>
       ) : (
         <>
@@ -401,9 +409,11 @@ export function AccountsReceivable() {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        sale.payment_status === 'unpaid' ? 'bg-red-900/50 text-red-400' : 'bg-yellow-900/50 text-yellow-400'
+                        sale.payment_status === 'paid' ? 'bg-green-900/50 text-green-400' :
+                        sale.payment_status === 'unpaid' ? 'bg-red-900/50 text-red-400' :
+                        'bg-yellow-900/50 text-yellow-400'
                       }`}>
-                        {sale.payment_status === 'unpaid' ? 'Unpaid' : 'Partial'}
+                        {sale.payment_status === 'paid' ? 'Paid' : sale.payment_status === 'unpaid' ? 'Unpaid' : 'Partial'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -421,7 +431,7 @@ export function AccountsReceivable() {
                           : `/accounts-receivable/${sale.id}/collect`}
                         className="text-teal-400 hover:text-teal-300"
                       >
-                        Collect
+                        {sale.balance <= 0.01 ? 'Edit Payments' : 'Collect'}
                       </Link>
                     </td>
                   </tr>
@@ -462,9 +472,11 @@ export function AccountsReceivable() {
                   </div>
                   <div className="flex gap-2">
                     <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                      sale.payment_status === 'unpaid' ? 'bg-red-900/50 text-red-400' : 'bg-yellow-900/50 text-yellow-400'
+                      sale.payment_status === 'paid' ? 'bg-green-900/50 text-green-400' :
+                      sale.payment_status === 'unpaid' ? 'bg-red-900/50 text-red-400' :
+                      'bg-yellow-900/50 text-yellow-400'
                     }`}>
-                      {sale.payment_status === 'unpaid' ? 'Unpaid' : 'Partial'}
+                      {sale.payment_status === 'paid' ? 'Paid' : sale.payment_status === 'unpaid' ? 'Unpaid' : 'Partial'}
                     </span>
                     <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getAgingClass(sale.days_overdue)}`}>
                       {sale.days_overdue}d
@@ -483,7 +495,7 @@ export function AccountsReceivable() {
                     : `/accounts-receivable/${sale.id}/collect`}
                   className="block w-full text-center py-2 bg-teal-600/20 border border-teal-500/30 rounded-lg text-sm text-teal-400 hover:bg-teal-600/30 transition-colors"
                 >
-                  Collect Payment
+                  {sale.balance <= 0.01 ? 'Edit Payments' : 'Collect Payment'}
                 </Link>
               </div>
             ))}
