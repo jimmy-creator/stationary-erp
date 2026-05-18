@@ -13,6 +13,7 @@ import {
   Receipt,
   Users,
   BookOpen,
+  Wallet,
   Eye,
   Edit3,
   Check,
@@ -28,7 +29,10 @@ const MODULES = [
   { key: 'purchase-orders', label: 'Purchase Orders', icon: ShoppingBag },
   { key: 'purchase-returns', label: 'Purchase Returns', icon: Undo2 },
   { key: 'expenses', label: 'Expenses', icon: Receipt },
+  { key: 'accounts-receivable', label: 'Receivables', icon: Wallet },
+  { key: 'accounts-payable', label: 'Payables', icon: Wallet },
   { key: 'employees', label: 'Employees', icon: Users },
+  { key: 'staff-receivables', label: 'Staff Receivables', icon: Wallet },
   { key: 'profits', label: 'Profits', icon: ShoppingBag },
   { key: 'daybook', label: 'Daybook', icon: BookOpen },
 ]

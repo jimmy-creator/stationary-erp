@@ -44,9 +44,13 @@ import { AccountsReceivable } from './pages/accounts-receivable/AccountsReceivab
 import { CollectPayment } from './pages/accounts-receivable/CollectPayment'
 import { CollectOpeningPayment } from './pages/accounts-receivable/CollectOpeningPayment'
 import { PaymentReceipt } from './pages/accounts-receivable/PaymentReceipt'
+import { CustomerPaymentReceipt } from './pages/accounts-receivable/CustomerPaymentReceipt'
 import { AccountsPayable } from './pages/accounts-payable/AccountsPayable'
 import { MakePayment } from './pages/accounts-payable/MakePayment'
 import { VendorPaymentReceipt } from './pages/accounts-payable/VendorPaymentReceipt'
+import { StaffReceivables } from './pages/staff-receivables/StaffReceivables'
+import { CollectStaffPayment } from './pages/staff-receivables/CollectStaffPayment'
+import { StaffPaymentReceipt } from './pages/staff-receivables/StaffPaymentReceipt'
 import { StoreSettings } from './pages/StoreSettings'
 import { UsersList } from './pages/users/UsersList'
 import { UserForm } from './pages/users/UserForm'
@@ -112,9 +116,13 @@ function App() {
             <Route path="/accounts-receivable/opening/:customerId/collect" element={<ProtectedModule moduleKey="accounts-receivable"><CollectOpeningPayment /></ProtectedModule>} />
             <Route path="/accounts-receivable/:id/collect" element={<ProtectedModule moduleKey="accounts-receivable"><CollectPayment /></ProtectedModule>} />
             <Route path="/sale-payments/:id" element={<ProtectedModule moduleKey="accounts-receivable"><PaymentReceipt /></ProtectedModule>} />
+            <Route path="/customer-payments/:id" element={<ProtectedModule moduleKey="accounts-receivable"><CustomerPaymentReceipt /></ProtectedModule>} />
             <Route path="/accounts-payable" element={<ProtectedModule moduleKey="accounts-payable"><AccountsPayable /></ProtectedModule>} />
             <Route path="/accounts-payable/:id/pay" element={<ProtectedModule moduleKey="accounts-payable"><MakePayment /></ProtectedModule>} />
             <Route path="/po-payments/:id" element={<ProtectedModule moduleKey="accounts-payable"><VendorPaymentReceipt /></ProtectedModule>} />
+            <Route path="/staff-receivables" element={<ProtectedModule moduleKey="staff-receivables"><StaffReceivables /></ProtectedModule>} />
+            <Route path="/staff-receivables/:employeeId/collect" element={<ProtectedModule moduleKey="staff-receivables"><CollectStaffPayment /></ProtectedModule>} />
+            <Route path="/employee-payments/:id" element={<ProtectedModule moduleKey="staff-receivables"><StaffPaymentReceipt /></ProtectedModule>} />
             <Route path="/daily-cash" element={<ProtectedModule moduleKey="daily-cash"><DailyCash /></ProtectedModule>} />
             <Route path="/cash-accounts" element={<ProtectedModule moduleKey="cash-accounts"><CashAccounts /></ProtectedModule>} />
 

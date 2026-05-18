@@ -4,13 +4,14 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Trash2, Pencil, Printer } from 'lucide-react'
 
-export function CollectOpeningPayment() {
-  const { customerId } = useParams()
+export function CollectStaffPayment() {
+  const { employeeId } = useParams()
   const navigate = useNavigate()
   const { isEmployee, user } = useAuth()
 
-  const [customer, setCustomer] = useState(null)
+  const [employee, setEmployee] = useState(null)
   const [payments, setPayments] = useState([])
+  const [custody, setCustody] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -34,17 +35,30 @@ export function CollectOpeningPayment() {
 
   useEffect(() => {
     fetchData()
-  }, [customerId])
+  }, [employeeId])
 
   const fetchData = async () => {
     try {
-      const [customerRes, paymentsRes] = await Promise.all([
-        supabase.from('customers').select('id, name, opening_balance, opening_balance_date').eq('id', customerId).single(),
-        supabase.from('customer_payments').select('*').eq('customer_id', customerId).order('payment_date', { ascending: false }),
+      const [empRes, paymentsRes] = await Promise.all([
+        supabase.from('employees').select('id, first_name, last_name, opening_balance, opening_balance_date, auth_user_id').eq('id', employeeId).single(),
+        supabase.from('employee_payments').select('*').eq('employee_id', employeeId).order('payment_date', { ascending: false }),
       ])
-      if (customerRes.error) throw customerRes.error
-      setCustomer(customerRes.data)
+      if (empRes.error) throw empRes.error
+      setEmployee(empRes.data)
       setPayments(paymentsRes.data || [])
+
+      // Cash custody — receipts this employee's login has issued.
+      if (empRes.data?.auth_user_id) {
+        const [salePayRes, custPayRes] = await Promise.all([
+          supabase.from('sale_payments').select('amount').eq('payment_method', 'cash').eq('created_by', empRes.data.auth_user_id),
+          supabase.from('customer_payments').select('amount').eq('payment_method', 'cash').eq('created_by', empRes.data.auth_user_id),
+        ])
+        const total = [...(salePayRes.data || []), ...(custPayRes.data || [])]
+          .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
+        setCustody(total)
+      } else {
+        setCustody(0)
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -55,9 +69,11 @@ export function CollectOpeningPayment() {
   const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
   const formatDate = (date) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
-  const opening = parseFloat(customer?.opening_balance || 0)
+  const opening = parseFloat(employee?.opening_balance || 0)
+  const totalOwed = opening + custody
   const totalCollected = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
-  const balance = opening - totalCollected
+  const balance = totalOwed - totalCollected
+  const employeeName = employee ? `${employee.first_name || ''} ${employee.last_name || ''}`.trim() : ''
 
   const handleCollect = async () => {
     const amount = parseFloat(newPayment.amount) || 0
@@ -78,14 +94,14 @@ export function CollectOpeningPayment() {
 
       if (discount > 0) {
         const { data, error } = await supabase
-          .from('customer_payments')
+          .from('employee_payments')
           .insert({
-            customer_id: customerId,
+            employee_id: employeeId,
             payment_date: newPayment.payment_date,
             amount: discount,
             payment_method: 'discount',
             reference: null,
-            notes: newPayment.notes ? `Settlement discount — ${newPayment.notes}` : 'Settlement discount',
+            notes: newPayment.notes ? `Write-off — ${newPayment.notes}` : 'Write-off',
             created_by: user?.id || null,
           })
           .select()
@@ -96,9 +112,9 @@ export function CollectOpeningPayment() {
 
       if (amount > 0) {
         const { data, error } = await supabase
-          .from('customer_payments')
+          .from('employee_payments')
           .insert({
-            customer_id: customerId,
+            employee_id: employeeId,
             payment_date: newPayment.payment_date,
             amount,
             payment_method: newPayment.payment_method,
@@ -112,11 +128,12 @@ export function CollectOpeningPayment() {
         inserted.push(data)
       }
 
-      // Jump to the printable receipt for the cash entry, mirroring the
-      // sale-invoice flow. Discount-only submissions stay on this page.
+      // Jump straight to the printable receipt for the cash payment so the
+      // user can issue it in one step. Discount-only entries have no receipt
+      // number — stay on the page in that case.
       const cashEntry = inserted.find((p) => p.receipt_number)
       if (cashEntry) {
-        navigate(`/customer-payments/${cashEntry.id}`)
+        navigate(`/employee-payments/${cashEntry.id}`)
         return
       }
 
@@ -131,7 +148,7 @@ export function CollectOpeningPayment() {
       })
     } catch (error) {
       console.error('Error collecting payment:', error)
-      alert('Failed to record payment. Make sure migration 031_customer_payments.sql has been run.')
+      alert('Failed to record payment. Make sure migration 032_employee_receivables.sql has been run.')
     } finally {
       setSaving(false)
     }
@@ -166,7 +183,7 @@ export function CollectOpeningPayment() {
     setSaving(true)
     try {
       const { data: updated, error } = await supabase
-        .from('customer_payments')
+        .from('employee_payments')
         .update({
           payment_date: editForm.payment_date,
           amount: newAmount,
@@ -192,7 +209,7 @@ export function CollectOpeningPayment() {
   const handleDeletePayment = async (paymentId) => {
     if (!confirm('Delete this payment record?')) return
     try {
-      const { error } = await supabase.from('customer_payments').delete().eq('id', paymentId)
+      const { error } = await supabase.from('employee_payments').delete().eq('id', paymentId)
       if (error) throw error
       setPayments(payments.filter((p) => p.id !== paymentId))
     } catch (error) {
@@ -205,32 +222,37 @@ export function CollectOpeningPayment() {
     return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
   }
 
-  if (!customer) {
-    return <div className="text-center py-8"><p className="text-zinc-500">Customer not found.</p><Link to="/accounts-receivable" className="text-teal-600 hover:underline">Back</Link></div>
+  if (!employee) {
+    return <div className="text-center py-8"><p className="text-zinc-500">Employee not found.</p><Link to="/staff-receivables" className="text-teal-600 hover:underline">Back</Link></div>
   }
 
-  const methodLabels = { cash: 'Cash', card: 'Card', bank_transfer: 'Bank Transfer', discount: 'Discount' }
-  const progress = opening > 0 ? Math.min(100, (totalCollected / opening) * 100) : 0
+  const methodLabels = { cash: 'Cash', card: 'Card', bank_transfer: 'Bank Transfer', discount: 'Write-off' }
+  const progress = totalOwed > 0 ? Math.min(100, (totalCollected / totalOwed) * 100) : 0
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <Link to="/accounts-receivable" className="text-teal-600 hover:underline text-sm mb-2 inline-block">&larr; Back to Receivables</Link>
-        <h1 className="text-xl lg:text-2xl font-bold text-white">Collect Opening Balance</h1>
+        <Link to="/staff-receivables" className="text-teal-600 hover:underline text-sm mb-2 inline-block">&larr; Back to Staff Receivables</Link>
+        <h1 className="text-xl lg:text-2xl font-bold text-white">Collect From Staff</h1>
         <p className="text-zinc-500">
-          <Link to={`/customers/${customer.id}`} className="hover:text-teal-400">{customer.name}</Link>
-          {customer.opening_balance_date && ` — opened ${formatDate(customer.opening_balance_date)}`}
+          <Link to={`/employees/${employee.id}`} className="hover:text-teal-400">{employeeName}</Link>
+          {employee.opening_balance_date && ` — opened ${formatDate(employee.opening_balance_date)}`}
         </p>
       </div>
 
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 mb-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
             <p className="text-xs text-zinc-500">Opening Balance</p>
             <p className="text-lg font-bold text-white">{formatCurrency(opening)}</p>
           </div>
           <div>
-            <p className="text-xs text-zinc-500">Total Collected</p>
+            <p className="text-xs text-zinc-500">Cash Custody</p>
+            <p className="text-lg font-bold text-amber-400">{formatCurrency(custody)}</p>
+            {!employee.auth_user_id && <p className="text-[10px] text-zinc-600 mt-0.5">No login linked</p>}
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Remitted</p>
             <p className="text-lg font-bold text-green-400">{formatCurrency(totalCollected)}</p>
           </div>
           <div>
@@ -277,7 +299,7 @@ export function CollectOpeningPayment() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-300 mb-1">Discount / Write-off (QAR)</label>
+                    <label className="block text-sm font-medium text-zinc-300 mb-1">Write-off (QAR)</label>
                     <input type="number" min="0" step="0.01" max={balance} value={newPayment.discount} onChange={(e) => setNewPayment({ ...newPayment, discount: e.target.value })} placeholder="0.00" className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
                     {enteredDiscount > 0 && <p className="text-xs text-amber-400 mt-1">Reduces balance without cash collected.</p>}
                   </div>
@@ -295,7 +317,7 @@ export function CollectOpeningPayment() {
                   <div className="mt-4 p-3 bg-zinc-800/40 rounded-lg flex flex-wrap items-center justify-between gap-2 text-sm">
                     <div className="flex flex-wrap gap-x-4 gap-y-1">
                       {enteredAmount > 0 && <span className="text-zinc-300">Payment: <span className="text-green-400 font-medium">{formatCurrency(enteredAmount)}</span></span>}
-                      {enteredDiscount > 0 && <span className="text-zinc-300">Discount: <span className="text-amber-400 font-medium">{formatCurrency(enteredDiscount)}</span></span>}
+                      {enteredDiscount > 0 && <span className="text-zinc-300">Write-off: <span className="text-amber-400 font-medium">{formatCurrency(enteredDiscount)}</span></span>}
                     </div>
                     <span className="text-zinc-300">Remaining after: <span className={`font-medium ${remainingAfter <= 0.01 ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(remainingAfter)}</span></span>
                   </div>
@@ -350,7 +372,7 @@ export function CollectOpeningPayment() {
                         <label className="block text-xs text-zinc-400 mb-1">Method</label>
                         <select value={editForm.payment_method} onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg text-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                           {isDiscount ? (
-                            <option value="discount">Discount</option>
+                            <option value="discount">Write-off</option>
                           ) : (
                             <>
                               <option value="cash">Cash</option>
@@ -384,7 +406,7 @@ export function CollectOpeningPayment() {
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       {payment.receipt_number && (
-                        <Link to={`/customer-payments/${payment.id}`} className="text-sm font-medium text-teal-400 hover:text-teal-300">
+                        <Link to={`/employee-payments/${payment.id}`} className="text-sm font-medium text-teal-400 hover:text-teal-300">
                           {payment.receipt_number}
                         </Link>
                       )}
@@ -399,7 +421,7 @@ export function CollectOpeningPayment() {
                   <div className="flex items-center gap-3 ml-4">
                     <span className={`font-medium ${isDiscount ? 'text-amber-400' : 'text-green-400'}`}>{formatCurrency(payment.amount)}</span>
                     {payment.receipt_number && (
-                      <Link to={`/customer-payments/${payment.id}`} title="Print receipt" className="text-zinc-400 hover:text-teal-400">
+                      <Link to={`/employee-payments/${payment.id}`} title="Print receipt" className="text-zinc-400 hover:text-teal-400">
                         <Printer className="w-4 h-4" />
                       </Link>
                     )}

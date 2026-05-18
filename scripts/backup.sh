@@ -72,6 +72,7 @@ TABLES=(
   "expenses"
   "expense_categories"
   "employees"
+  "employee_payments"
   "stock_adjustments"
 )
 

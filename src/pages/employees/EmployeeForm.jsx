@@ -14,9 +14,33 @@ export function EmployeeForm() {
     first_name: '', last_name: '', email: '', phone: '',
     position: '', department: '', salary: '', currency: 'QAR',
     hire_date: '', status: 'active',
+    opening_balance: '', opening_balance_date: '',
+    auth_user_id: '',
   })
+  const [availableUsers, setAvailableUsers] = useState([])
 
-  useEffect(() => { if (isEditing) fetchEmployee() }, [id])
+  useEffect(() => {
+    if (isEditing) fetchEmployee()
+    fetchAvailableUsers()
+  }, [id])
+
+  const fetchAvailableUsers = async () => {
+    try {
+      // Pull every profile + which employee record (if any) already claims it.
+      // The dropdown excludes profiles linked to a different employee so each
+      // login maps to at most one staff record.
+      const [profilesRes, takenRes] = await Promise.all([
+        supabase.from('profiles').select('id, email, role').order('email'),
+        supabase.from('employees').select('auth_user_id').not('auth_user_id', 'is', null),
+      ])
+      const takenIds = new Set((takenRes.data || []).map((e) => e.auth_user_id))
+      setAvailableUsers(
+        (profilesRes.data || []).filter((p) => !takenIds.has(p.id) || p.id === formData.auth_user_id)
+      )
+    } catch (error) {
+      console.error('Error fetching profiles:', error)
+    }
+  }
 
   const fetchEmployee = async () => {
     setLoading(true)
@@ -29,6 +53,9 @@ export function EmployeeForm() {
         position: data.position || '', department: data.department || '',
         salary: data.salary || '', currency: data.currency || 'QAR',
         hire_date: data.hire_date || '', status: data.status || 'active',
+        opening_balance: data.opening_balance || '',
+        opening_balance_date: data.opening_balance_date || '',
+        auth_user_id: data.auth_user_id || '',
       })
     } catch (error) {
       console.error('Error:', error)
@@ -41,12 +68,16 @@ export function EmployeeForm() {
     e.preventDefault()
     setSaving(true)
     try {
+      const opening = parseFloat(formData.opening_balance)
       const employeeData = {
         first_name: formData.first_name, last_name: formData.last_name,
         email: formData.email || null, phone: formData.phone || null,
         position: formData.position || null, department: formData.department || null,
         salary: formData.salary ? parseFloat(formData.salary) : null, currency: formData.currency,
         hire_date: formData.hire_date || null, status: formData.status,
+        opening_balance: Number.isFinite(opening) && opening > 0 ? opening : 0,
+        opening_balance_date: formData.opening_balance_date || null,
+        auth_user_id: formData.auth_user_id || null,
       }
 
       if (isEditing) {
@@ -128,6 +159,35 @@ export function EmployeeForm() {
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Hire Date</label>
               <input type="date" value={formData.hire_date} onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
+          <h2 className="text-lg font-medium text-white mb-1">Login Account</h2>
+          <p className="text-xs text-zinc-500 mb-4">Link this HR record to a login user. Cash receipts they issue will be attributed to them in Staff Receivables.</p>
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">Login User</label>
+            <select value={formData.auth_user_id} onChange={(e) => setFormData({ ...formData, auth_user_id: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
+              <option value="">— Not linked —</option>
+              {availableUsers.map((u) => (
+                <option key={u.id} value={u.id}>{u.email}{u.role ? ` (${u.role})` : ''}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
+          <h2 className="text-lg font-medium text-white mb-1">Opening Receivable</h2>
+          <p className="text-xs text-zinc-500 mb-4">Money this employee owes the company at onboarding (advances, store credit, etc.). Leave blank if none.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Opening Balance (QAR)</label>
+              <input type="number" min="0" step="0.01" value={formData.opening_balance} onChange={(e) => setFormData({ ...formData, opening_balance: e.target.value })} placeholder="0.00" className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-1">As of Date</label>
+              <input type="date" value={formData.opening_balance_date} onChange={(e) => setFormData({ ...formData, opening_balance_date: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
             </div>
           </div>
         </div>

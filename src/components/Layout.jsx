@@ -88,6 +88,7 @@ export function Layout() {
       title: 'People',
       items: [
         { to: '/employees', label: 'Employees', icon: Users, moduleKey: 'employees' },
+        { to: '/staff-receivables', label: 'Staff Receivables', icon: Wallet, moduleKey: 'staff-receivables' },
       ],
     },
   ]

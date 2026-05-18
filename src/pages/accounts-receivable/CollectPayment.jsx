@@ -7,7 +7,7 @@ import { Trash2, Printer, Pencil } from 'lucide-react'
 export function CollectPayment() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isEmployee } = useAuth()
+  const { isEmployee, user } = useAuth()
 
   const [sale, setSale] = useState(null)
   const [payments, setPayments] = useState([])
@@ -98,6 +98,7 @@ export function CollectPayment() {
             payment_method: 'discount',
             reference: null,
             notes: newPayment.notes ? `Settlement discount — ${newPayment.notes}` : 'Settlement discount',
+            created_by: user?.id || null,
           })
           .select()
           .single()
@@ -115,6 +116,7 @@ export function CollectPayment() {
             payment_method: newPayment.payment_method,
             reference: newPayment.reference || null,
             notes: newPayment.notes || null,
+            created_by: user?.id || null,
           })
           .select()
           .single()
@@ -132,8 +134,12 @@ export function CollectPayment() {
         .eq('id', id)
       if (saleError) throw saleError
 
-      if (newStatus === 'paid') {
-        navigate('/accounts-receivable')
+      // Jump to the printable receipt for the new cash entry so the user can
+      // issue it immediately. Discount-only submissions have no receipt and
+      // fall through to the normal in-place refresh.
+      const cashEntry = inserted.find((p) => p.receipt_number)
+      if (cashEntry) {
+        navigate(`/sale-payments/${cashEntry.id}`)
         return
       }
 
