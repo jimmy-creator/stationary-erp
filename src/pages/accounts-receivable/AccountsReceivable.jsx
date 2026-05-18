@@ -130,6 +130,10 @@ export function AccountsReceivable() {
   const totalPartial = outstandingSales.filter((s) => s.payment_status === 'partial').reduce((sum, s) => sum + s.balance, 0)
   const overdueCount = outstandingSales.filter((s) => s.days_overdue > 30).length
 
+  // Print and on-screen table footer match the currently-visible rows, so a
+  // customer filter doesn't leave the printed top KPI showing a global total.
+  const filteredOutstanding = filteredSales.reduce((sum, s) => sum + s.balance, 0)
+
   const getAgingClass = (days) => {
     if (days > 60) return 'bg-red-900/50 text-red-400'
     if (days > 30) return 'bg-orange-900/50 text-orange-400'
@@ -166,7 +170,6 @@ export function AccountsReceivable() {
       <div className="hidden print:block print-area">
         <div style={{ padding: '28px 32px' }}>
           <h1 style={{ fontSize: '18pt', fontWeight: 700, marginBottom: '2px', color: '#111' }}>{store.store_name}</h1>
-          {store.address && <p style={{ fontSize: '9pt', color: '#666', whiteSpace: 'pre-wrap', margin: 0 }}>{store.address}</p>}
           {(store.phone || store.email) && <p style={{ fontSize: '9pt', color: '#666', margin: 0 }}>{store.phone && `Tel: ${store.phone}`}{store.phone && store.email && ' | '}{store.email}</p>}
           <h2 style={{ fontSize: '14pt', fontWeight: 600, marginTop: '12px', marginBottom: '4px', color: '#111' }}>Accounts Receivable Report</h2>
           <p style={{ fontSize: '10pt', color: '#666', marginBottom: '20px' }}>
@@ -176,7 +179,7 @@ export function AccountsReceivable() {
 
           {/* Summary */}
           <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', borderBottom: '2px solid #e5e7eb', paddingBottom: '12px' }}>
-            <div><p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase' }}>Total Outstanding</p><p style={{ fontSize: '16pt', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(totalOutstanding)}</p></div>
+            <div><p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase' }}>Total Outstanding</p><p style={{ fontSize: '16pt', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(filteredOutstanding)}</p></div>
             <div><p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase' }}>Invoices</p><p style={{ fontSize: '16pt', fontWeight: 700, color: '#111' }}>{filteredSales.length}</p></div>
             <div><p style={{ fontSize: '9pt', color: '#666', textTransform: 'uppercase' }}>Customers</p><p style={{ fontSize: '16pt', fontWeight: 700, color: '#111' }}>{customerBalances.length}</p></div>
           </div>
@@ -203,48 +206,16 @@ export function AccountsReceivable() {
                   <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(c.balance)}</td>
                 </tr>
               ))}
-            </tbody>
-            <tfoot>
               <tr style={{ borderTop: '2px solid #111' }}>
                 <td style={{ padding: '8px', fontWeight: 700, color: '#111' }}>Total</td>
                 <td style={{ padding: '8px', textAlign: 'center', fontWeight: 600, color: '#111' }}>{filteredSales.length}</td>
                 <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#111' }}>{formatCurrency(customerBalances.reduce((s, c) => s + c.total, 0))}</td>
                 <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>{formatCurrency(customerBalances.reduce((s, c) => s + c.paid, 0))}</td>
-                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(totalOutstanding)}</td>
+                <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(filteredOutstanding)}</td>
               </tr>
-            </tfoot>
-          </table>
-
-          {/* Invoice Details */}
-          <h2 style={{ fontSize: '12pt', fontWeight: 600, marginBottom: '8px', color: '#111' }}>Invoice Details</h2>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #d1d5db' }}>
-                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Invoice</th>
-                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Date</th>
-                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Customer</th>
-                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Status</th>
-                <th style={{ textAlign: 'left', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Age</th>
-                <th style={{ textAlign: 'right', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Total</th>
-                <th style={{ textAlign: 'right', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Paid</th>
-                <th style={{ textAlign: 'right', padding: '5px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase' }}>Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSales.map((sale) => (
-                <tr key={sale.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                  <td style={{ padding: '6px', color: '#111', fontWeight: 500 }}>{sale.invoice_number}</td>
-                  <td style={{ padding: '6px', color: '#666' }}>{formatDate(sale.sale_date)}</td>
-                  <td style={{ padding: '6px', color: '#374151' }}>{sale.customer_name || 'Walk-in'}</td>
-                  <td style={{ padding: '6px', color: sale.payment_status === 'unpaid' ? '#dc2626' : '#ca8a04' }}>{sale.payment_status === 'unpaid' ? 'Unpaid' : 'Partial'}</td>
-                  <td style={{ padding: '6px', color: sale.days_overdue > 30 ? '#dc2626' : '#666' }}>{sale.days_overdue}d</td>
-                  <td style={{ padding: '6px', textAlign: 'right', color: '#374151' }}>{formatCurrency(sale.grand_total)}</td>
-                  <td style={{ padding: '6px', textAlign: 'right', color: '#16a34a' }}>{formatCurrency(sale.total_paid)}</td>
-                  <td style={{ padding: '6px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(sale.balance)}</td>
-                </tr>
-              ))}
             </tbody>
           </table>
+
         </div>
       </div>
 
