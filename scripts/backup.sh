@@ -74,6 +74,8 @@ TABLES=(
   "employees"
   "employee_payments"
   "stock_adjustments"
+  "capital_movements"
+  "fixed_assets"
 )
 
 # Export each table as JSON

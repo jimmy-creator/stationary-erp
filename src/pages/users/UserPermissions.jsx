@@ -14,6 +14,7 @@ import {
   Users,
   BookOpen,
   Wallet,
+  TrendingUp,
   Eye,
   Edit3,
   Check,
@@ -33,6 +34,8 @@ const MODULES = [
   { key: 'accounts-payable', label: 'Payables', icon: Wallet },
   { key: 'employees', label: 'Employees', icon: Users },
   { key: 'staff-receivables', label: 'Staff Receivables', icon: Wallet },
+  { key: 'capital', label: 'Capital', icon: TrendingUp },
+  { key: 'fixed-assets', label: 'Fixed Assets', icon: Package },
   { key: 'profits', label: 'Profits', icon: ShoppingBag },
   { key: 'daybook', label: 'Daybook', icon: BookOpen },
 ]

@@ -23,6 +23,7 @@ import {
   BookOpen,
   FileBarChart,
   BarChart3,
+  TrendingUp,
   Settings,
   UserCog,
   LogOut,
@@ -73,6 +74,8 @@ export function Layout() {
         { to: '/accounts-payable', label: 'Payables', icon: CreditCard, moduleKey: 'accounts-payable' },
         { to: '/daily-cash', label: 'Daily Cash', icon: Calculator, moduleKey: 'daily-cash' },
         { to: '/cash-accounts', label: 'Cash Accounts', icon: Banknote, moduleKey: 'cash-accounts' },
+        { to: '/capital', label: 'Capital', icon: TrendingUp, moduleKey: 'capital' },
+        { to: '/fixed-assets', label: 'Fixed Assets', icon: Package, moduleKey: 'fixed-assets' },
       ],
     },
     {

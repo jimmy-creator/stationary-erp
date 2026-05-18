@@ -51,6 +51,10 @@ import { VendorPaymentReceipt } from './pages/accounts-payable/VendorPaymentRece
 import { StaffReceivables } from './pages/staff-receivables/StaffReceivables'
 import { CollectStaffPayment } from './pages/staff-receivables/CollectStaffPayment'
 import { StaffPaymentReceipt } from './pages/staff-receivables/StaffPaymentReceipt'
+import { CapitalList } from './pages/capital/CapitalList'
+import { CapitalForm } from './pages/capital/CapitalForm'
+import { FixedAssetsList } from './pages/fixed-assets/FixedAssetsList'
+import { FixedAssetForm } from './pages/fixed-assets/FixedAssetForm'
 import { StoreSettings } from './pages/StoreSettings'
 import { UsersList } from './pages/users/UsersList'
 import { UserForm } from './pages/users/UserForm'
@@ -123,6 +127,12 @@ function App() {
             <Route path="/staff-receivables" element={<ProtectedModule moduleKey="staff-receivables"><StaffReceivables /></ProtectedModule>} />
             <Route path="/staff-receivables/:employeeId/collect" element={<ProtectedModule moduleKey="staff-receivables"><CollectStaffPayment /></ProtectedModule>} />
             <Route path="/employee-payments/:id" element={<ProtectedModule moduleKey="staff-receivables"><StaffPaymentReceipt /></ProtectedModule>} />
+            <Route path="/capital" element={<ProtectedModule moduleKey="capital"><CapitalList /></ProtectedModule>} />
+            <Route path="/capital/new" element={<ProtectedModule moduleKey="capital"><CapitalForm /></ProtectedModule>} />
+            <Route path="/capital/:id/edit" element={<ProtectedModule moduleKey="capital"><CapitalForm /></ProtectedModule>} />
+            <Route path="/fixed-assets" element={<ProtectedModule moduleKey="fixed-assets"><FixedAssetsList /></ProtectedModule>} />
+            <Route path="/fixed-assets/new" element={<ProtectedModule moduleKey="fixed-assets"><FixedAssetForm /></ProtectedModule>} />
+            <Route path="/fixed-assets/:id/edit" element={<ProtectedModule moduleKey="fixed-assets"><FixedAssetForm /></ProtectedModule>} />
             <Route path="/daily-cash" element={<ProtectedModule moduleKey="daily-cash"><DailyCash /></ProtectedModule>} />
             <Route path="/cash-accounts" element={<ProtectedModule moduleKey="cash-accounts"><CashAccounts /></ProtectedModule>} />
 

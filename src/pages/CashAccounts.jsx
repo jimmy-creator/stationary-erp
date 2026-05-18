@@ -17,6 +17,9 @@ export function CashAccounts() {
 
   const [cashSales, setCashSales] = useState([])
   const [cashPurchases, setCashPurchases] = useState([])
+  const [capitalIn, setCapitalIn] = useState([])
+  const [capitalOut, setCapitalOut] = useState([])
+  const [fixedAssets, setFixedAssets] = useState([])
 
   useEffect(() => { fetchData() }, [period, selectedMonth, dateRange.from, dateRange.to])
 
@@ -58,6 +61,30 @@ export function CashAccounts() {
 
       if (poRes.error) console.error('Cash purchases error:', poRes.error)
       setCashPurchases(poRes.data || [])
+
+      // Capital movements (cash only) and fixed asset purchases (cash only)
+      // — both feed into cash inflow/outflow totals.
+      const capRes = await supabase
+        .from('capital_movements')
+        .select('*')
+        .eq('payment_method', 'cash')
+        .gte('movement_date', from)
+        .lte('movement_date', to)
+        .order('movement_date', { ascending: false })
+        .then((r) => r).catch(() => ({ data: [], error: null }))
+      const cap = capRes.data || []
+      setCapitalIn(cap.filter((c) => c.direction === 'in'))
+      setCapitalOut(cap.filter((c) => c.direction === 'out'))
+
+      const faRes = await supabase
+        .from('fixed_assets')
+        .select('*')
+        .eq('payment_method', 'cash')
+        .gte('purchase_date', from)
+        .lte('purchase_date', to)
+        .order('purchase_date', { ascending: false })
+        .then((r) => r).catch(() => ({ data: [], error: null }))
+      setFixedAssets(faRes.data || [])
     } catch (err) {
       console.error('fetchData error:', err)
     } finally {
@@ -76,6 +103,10 @@ export function CashAccounts() {
   const totalCashSalesRevenue = cashSales.reduce((s, x) => s + parseFloat(x.grand_total || 0), 0)
   const unpaidCashSales = cashSales.filter((x) => x.payment_status !== 'paid').length
 
+  const totalCapitalIn = capitalIn.reduce((s, x) => s + parseFloat(x.amount || 0), 0)
+  const totalCapitalOut = capitalOut.reduce((s, x) => s + parseFloat(x.amount || 0), 0)
+  const totalFixedAssets = fixedAssets.reduce((s, x) => s + parseFloat(x.cost || 0), 0)
+
   // Monthly breakdown for sales
   const salesByMonth = cashSales.reduce((acc, s) => {
     const key = s.sale_date?.substring(0, 7)
@@ -90,6 +121,11 @@ export function CashAccounts() {
 
   // ── Purchase stats
   const totalCashPurchases = cashPurchases.reduce((s, x) => s + parseFloat(x.amount || 0), 0)
+
+  // Composite totals folding in capital and fixed-asset cash flow
+  const totalCashIn = totalCashSales + totalCapitalIn
+  const totalCashOut = totalCashPurchases + totalCapitalOut + totalFixedAssets
+  const netCash = totalCashIn - totalCashOut
 
   // Monthly breakdown for purchases
   const purchasesByMonth = cashPurchases.reduce((acc, p) => {
@@ -148,7 +184,7 @@ export function CashAccounts() {
         </div>
       )}
 
-      {/* Top summary */}
+      {/* Top summary — composite totals fold in capital and fixed asset cash flow */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
           <div className="flex items-center gap-3">
@@ -156,8 +192,32 @@ export function CashAccounts() {
               <ArrowUpRight className="w-5 h-5 text-green-400" />
             </div>
             <div>
-              <p className="text-xs text-zinc-500">Cash Sales Received</p>
-              <p className="text-lg font-bold text-green-400">{fmt(totalCashSales)}</p>
+              <p className="text-xs text-zinc-500">Total Cash In</p>
+              <p className="text-lg font-bold text-green-400">{fmt(totalCashIn)}</p>
+              {totalCapitalIn > 0 && <p className="text-[10px] text-zinc-500 mt-0.5">incl. capital {fmt(totalCapitalIn)}</p>}
+            </div>
+          </div>
+        </div>
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+              <ArrowDownRight className="w-5 h-5 text-red-400" />
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500">Total Cash Out</p>
+              <p className="text-lg font-bold text-red-400">{fmt(totalCashOut)}</p>
+              {(totalCapitalOut + totalFixedAssets) > 0 && <p className="text-[10px] text-zinc-500 mt-0.5">incl. assets {fmt(totalFixedAssets)}{totalCapitalOut > 0 && `, draws ${fmt(totalCapitalOut)}`}</p>}
+            </div>
+          </div>
+        </div>
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${netCash >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+              <Banknote className={`w-5 h-5 ${netCash >= 0 ? 'text-green-400' : 'text-red-400'}`} />
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500">Net Cash</p>
+              <p className={`text-lg font-bold ${netCash >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmt(netCash)}</p>
             </div>
           </div>
         </div>
@@ -172,29 +232,28 @@ export function CashAccounts() {
             </div>
           </div>
         </div>
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
-              <ArrowDownRight className="w-5 h-5 text-red-400" />
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500">Cash Purchases Paid</p>
-              <p className="text-lg font-bold text-red-400">{fmt(totalCashPurchases)}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${totalCashSales - totalCashPurchases >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
-              <Banknote className={`w-5 h-5 ${totalCashSales - totalCashPurchases >= 0 ? 'text-green-400' : 'text-red-400'}`} />
-            </div>
-            <div>
-              <p className="text-xs text-zinc-500">Net Cash</p>
-              <p className={`text-lg font-bold ${totalCashSales - totalCashPurchases >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmt(totalCashSales - totalCashPurchases)}</p>
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* Capital & Fixed Asset breakdown — only shown when there's activity */}
+      {(totalCapitalIn > 0 || totalCapitalOut > 0 || totalFixedAssets > 0) && (
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 mb-6">
+          <h2 className="text-sm font-medium text-zinc-400 uppercase mb-3">Capital & Fixed Assets ({periodLabel})</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Capital Injections</span>
+              <span className="text-green-400 font-medium">+{fmt(totalCapitalIn)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Owner Withdrawals</span>
+              <span className="text-red-400 font-medium">-{fmt(totalCapitalOut)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Fixed Asset Purchases</span>
+              <span className="text-red-400 font-medium">-{fmt(totalFixedAssets)}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 bg-zinc-900/50 border border-zinc-800 rounded-xl p-1 w-fit">
