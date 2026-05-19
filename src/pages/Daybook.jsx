@@ -101,6 +101,7 @@ export function Daybook() {
     month: 'long',
     day: 'numeric',
   })
+  const printDate = new Date(selectedDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
   const isEmpty =
     sales.length === 0 &&
@@ -205,7 +206,7 @@ export function Daybook() {
           )}
 
           <h2 style={{ fontSize: '14pt', fontWeight: 600, marginTop: '12px', marginBottom: '4px', color: '#111' }}>Daybook</h2>
-          <p style={{ fontSize: '10pt', color: '#666', marginBottom: '20px' }}>{friendlyDate}</p>
+          <p style={{ fontSize: '10pt', color: '#666', marginBottom: '20px' }}>{printDate}</p>
 
           {/* Summary */}
           <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', borderBottom: '2px solid #e5e7eb', paddingBottom: '12px', flexWrap: 'wrap' }}>

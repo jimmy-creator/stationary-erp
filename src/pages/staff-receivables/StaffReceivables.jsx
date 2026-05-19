@@ -108,6 +108,7 @@ export function StaffReceivables() {
 
   const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
+  const formatDatePrint = (date) => date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
 
   const filteredRows = rows.filter((r) => {
     if (!filter.status && r.balance <= 0.01) return false
@@ -144,7 +145,7 @@ export function StaffReceivables() {
           {(store.phone || store.email) && <p style={{ fontSize: '9pt', color: '#666', margin: 0 }}>{store.phone && `Tel: ${store.phone}`}{store.phone && store.email && ' | '}{store.email}</p>}
           <h2 style={{ fontSize: '14pt', fontWeight: 600, marginTop: '12px', marginBottom: '4px', color: '#111' }}>Staff Receivables Report</h2>
           <p style={{ fontSize: '10pt', color: '#666', marginBottom: '20px' }}>
-            Generated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            Generated: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
           </p>
 
           <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', borderBottom: '2px solid #e5e7eb', paddingBottom: '12px' }}>
@@ -167,7 +168,7 @@ export function StaffReceivables() {
               {filteredRows.map((r) => (
                 <tr key={r.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
                   <td style={{ padding: '8px', fontWeight: 500, color: '#111' }}>{r.name}</td>
-                  <td style={{ padding: '8px', color: '#666' }}>{formatDate(r.opening_date)}</td>
+                  <td style={{ padding: '8px', color: '#666' }}>{formatDatePrint(r.opening_date)}</td>
                   <td style={{ padding: '8px', textAlign: 'right', color: '#374151' }}>{formatCurrency(r.grand_total)}</td>
                   <td style={{ padding: '8px', textAlign: 'right', color: '#16a34a' }}>{formatCurrency(r.total_paid)}</td>
                   <td style={{ padding: '8px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{formatCurrency(r.balance)}</td>

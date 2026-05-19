@@ -216,6 +216,7 @@ export function PurchaseOrderView() {
   }
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'
+  const formatDatePrint = (date) => date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
   const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 
   const statusLabels = {
@@ -297,8 +298,8 @@ export function PurchaseOrderView() {
               <p className="text-lg font-semibold text-teal-400">{order.po_number}</p>
             </div>
             <div className="sm:text-right">
-              <p className="text-sm text-zinc-500">Date: {formatDate(order.po_date)}</p>
-              {order.expected_delivery_date && <p className="text-sm text-zinc-500">Expected: {formatDate(order.expected_delivery_date)}</p>}
+              <p className="text-sm text-zinc-500">Date: {formatDatePrint(order.po_date)}</p>
+              {order.expected_delivery_date && <p className="text-sm text-zinc-500">Expected: {formatDatePrint(order.expected_delivery_date)}</p>}
               <span className={`inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full ${statusLabels[order.status]?.class}`}>{statusLabels[order.status]?.label}</span>
             </div>
           </div>

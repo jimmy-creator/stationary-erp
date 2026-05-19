@@ -5,7 +5,7 @@ import { useStoreSettings } from '../../hooks/useStoreSettings'
 import { Printer } from 'lucide-react'
 
 const fmtScreen = (n) => `QAR ${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '-'
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
 
 const DARK = '#111111'
 const GRAY = '#444444'

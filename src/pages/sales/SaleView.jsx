@@ -40,7 +40,7 @@ const fmt = (n) =>
   `QR ${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 
 const fmtDate = (d) =>
-  d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '-'
+  d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
 
 // ─── Inline styles ────────────────────────────────────────────────────────────
 const GREEN = '#4a90c4'

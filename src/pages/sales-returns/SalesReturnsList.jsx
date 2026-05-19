@@ -88,6 +88,7 @@ export function SalesReturnsList() {
   }
 
   const formatDate = (date) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+  const formatDatePrint = (date) => new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 
   const statusLabels = {
@@ -118,7 +119,7 @@ export function SalesReturnsList() {
 
           <h2 style={{ fontSize: '14pt', fontWeight: 600, marginTop: '12px', marginBottom: '4px', color: '#111' }}>Sales Returns Report</h2>
           <p style={{ fontSize: '10pt', color: '#666', marginBottom: activeFilters.length ? '4px' : '20px' }}>
-            Generated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            Generated: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
           </p>
           {activeFilters.length > 0 && (
             <p style={{ fontSize: '9pt', color: '#666', marginBottom: '20px' }}>{activeFilters.join(' · ')}</p>
@@ -154,7 +155,7 @@ export function SalesReturnsList() {
               {returns.map((r) => (
                 <tr key={r.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
                   <td style={{ padding: '6px', color: '#111', fontWeight: 500 }}>{r.return_number}</td>
-                  <td style={{ padding: '6px', color: '#666' }}>{formatDate(r.return_date)}</td>
+                  <td style={{ padding: '6px', color: '#666' }}>{formatDatePrint(r.return_date)}</td>
                   <td style={{ padding: '6px', color: '#374151' }}>{r.customer_name || 'Walk-in'}</td>
                   <td style={{ padding: '6px', color: '#374151' }}>{refundMethodLabels[r.refund_method] || '-'}</td>
                   <td style={{ padding: '6px', color: r.status === 'completed' ? '#16a34a' : '#dc2626' }}>{statusLabels[r.status]?.label || r.status}</td>

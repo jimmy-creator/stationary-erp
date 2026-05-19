@@ -7,7 +7,7 @@ import { useStoreSettings } from '../../hooks/useStoreSettings'
 
 const fmt = (n) => `QR ${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 const fmtCurrencyScreen = (n) => `QAR ${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '-'
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
 
 const DARK = '#111111'
 const GRAY = '#444444'
@@ -263,7 +263,7 @@ export function SupplierView() {
   const allDebit = allRows.reduce((s, r) => s + r.debit, 0)
   const allCredit = allRows.reduce((s, r) => s + r.credit, 0)
   const closingBalance = allDebit - allCredit
-  const generatedAt = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')
+  const generatedAt = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
   return (
     <div className="max-w-4xl mx-auto print-area">

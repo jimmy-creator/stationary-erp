@@ -173,7 +173,7 @@ export function AccountsReceivable() {
           {(store.phone || store.email) && <p style={{ fontSize: '9pt', color: '#666', margin: 0 }}>{store.phone && `Tel: ${store.phone}`}{store.phone && store.email && ' | '}{store.email}</p>}
           <h2 style={{ fontSize: '14pt', fontWeight: 600, marginTop: '12px', marginBottom: '4px', color: '#111' }}>Accounts Receivable Report</h2>
           <p style={{ fontSize: '10pt', color: '#666', marginBottom: '20px' }}>
-            Generated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            Generated: {new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}
             {filter.customer && ` | Customer: ${filter.customer}`}
           </p>
 
