@@ -53,6 +53,8 @@ export function Reconciliation() {
         expensesRes,
         poPaymentsRes,
         purchaseOrdersRes,
+        capitalRes,
+        fixedAssetsRes,
       ] = await Promise.all([
         supabase.from('sales')
           .select('id, grand_total, amount_paid, payment_method, payment_status, subtotal, discount_amount, tax_amount')
@@ -81,14 +83,24 @@ export function Reconciliation() {
           .select('grand_total, amount_paid, payment_status')
           .eq('status', 'received')
           .gte('po_date', from).lte('po_date', to),
+
+        supabase.from('capital_movements')
+          .select('amount, direction, payment_method')
+          .gte('movement_date', from).lte('movement_date', to),
+
+        supabase.from('fixed_assets')
+          .select('cost, payment_method')
+          .gte('purchase_date', from).lte('purchase_date', to),
       ])
 
-      const sales            = salesRes.data || []
-      const salePayments     = salePaymentsRes.data || []
-      const customerPayments = customerPaymentsRes.data || []
-      const expenses         = expensesRes.data || []
-      const poPayments       = poPaymentsRes.data || []
-      const purchaseOrders   = purchaseOrdersRes.data || []
+      const sales             = salesRes.data || []
+      const salePayments      = salePaymentsRes.data || []
+      const customerPayments  = customerPaymentsRes.data || []
+      const expenses          = expensesRes.data || []
+      const poPayments        = poPaymentsRes.data || []
+      const purchaseOrders    = purchaseOrdersRes.data || []
+      const capitalMovements  = capitalRes.data || []
+      const fixedAssets       = fixedAssetsRes.data || []
 
       // ── CHECK 1: Sales breakdown by payment method ──
       const totalSalesInvoiced = sumField(sales, 'grand_total')
@@ -118,15 +130,24 @@ export function Reconciliation() {
       })
 
       // ── CHECK 4: Cash flow reconciliation ──
-      // Cash in = cash sales received + cash collections (sale + opening balance)
+      // Cash in = cash sales received + cash collections (sale + opening balance) + cash capital injections
       const cashSalesReceived       = sumFieldWhere(sales, 'amount_paid', 'payment_method', 'cash')
       const cashCollections         = sumFieldWhere(salePayments, 'amount', 'payment_method', 'cash')
       const cashOpeningCollections  = sumFieldWhere(customerPayments, 'amount', 'payment_method', 'cash')
-      const cashIn                  = cashSalesReceived + cashCollections + cashOpeningCollections
-      // Cash out = cash expenses + cash PO payments
+      const cashCapitalIn           = capitalMovements
+        .filter(c => c.direction === 'in' && c.payment_method === 'cash')
+        .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
+      const cashIn                  = cashSalesReceived + cashCollections + cashOpeningCollections + cashCapitalIn
+      // Cash out = cash expenses + cash PO payments + cash owner withdrawals + cash fixed-asset purchases
       const cashExpenses            = sumFieldWhere(expenses, 'amount', 'payment_method', 'cash')
       const cashPOPayments          = sumFieldWhere(poPayments, 'amount', 'payment_method', 'cash')
-      const cashOut                 = cashExpenses + cashPOPayments
+      const cashCapitalOut          = capitalMovements
+        .filter(c => c.direction === 'out' && c.payment_method === 'cash')
+        .reduce((s, c) => s + (parseFloat(c.amount) || 0), 0)
+      const cashFixedAssets         = fixedAssets
+        .filter(a => a.payment_method === 'cash')
+        .reduce((s, a) => s + (parseFloat(a.cost) || 0), 0)
+      const cashOut                 = cashExpenses + cashPOPayments + cashCapitalOut + cashFixedAssets
       const netCash                 = cashIn - cashOut
 
       // ── CHECK 5: AP reconciliation ──
@@ -143,7 +164,7 @@ export function Reconciliation() {
         sales: { total: totalSalesInvoiced, received: totalReceived, cash: cashSalesInvoiced, card: cardSalesInvoiced, bank: bankSalesInvoiced, credit: creditSalesInvoiced, methodSum },
         ar: { expected: expectedAR, actual: actualAR },
         subtotal: { totalDiff: check3Diff, count: sales.length },
-        cash: { cashSalesReceived, cashCollections, cashOpeningCollections, cashIn, cashExpenses, cashPOPayments, cashOut, netCash },
+        cash: { cashSalesReceived, cashCollections, cashOpeningCollections, cashCapitalIn, cashIn, cashExpenses, cashPOPayments, cashCapitalOut, cashFixedAssets, cashOut, netCash },
         ap: { expected: expectedAP, actual: actualAP, totalInvoiced: totalPOInvoiced, totalPaid: totalPOPaid },
         checks: {
           salesBreakdown: check1Diff,
@@ -330,6 +351,10 @@ export function Reconciliation() {
                 <p className="text-green-400">+{fmt(data.cash.cashOpeningCollections)}</p>
               </div>
               <div className="bg-zinc-900/50 rounded-lg p-3">
+                <p className="text-zinc-500 text-xs mb-1">Capital Injections</p>
+                <p className="text-green-400">+{fmt(data.cash.cashCapitalIn)}</p>
+              </div>
+              <div className="bg-zinc-900/50 rounded-lg p-3">
                 <p className="text-zinc-500 text-xs mb-1">Total Cash In</p>
                 <p className="font-bold text-green-400">{fmt(data.cash.cashIn)}</p>
               </div>
@@ -340,6 +365,14 @@ export function Reconciliation() {
               <div className="bg-zinc-900/50 rounded-lg p-3">
                 <p className="text-zinc-500 text-xs mb-1">Cash PO Payments</p>
                 <p className="text-red-400">-{fmt(data.cash.cashPOPayments)}</p>
+              </div>
+              <div className="bg-zinc-900/50 rounded-lg p-3">
+                <p className="text-zinc-500 text-xs mb-1">Owner Withdrawals</p>
+                <p className="text-red-400">-{fmt(data.cash.cashCapitalOut)}</p>
+              </div>
+              <div className="bg-zinc-900/50 rounded-lg p-3">
+                <p className="text-zinc-500 text-xs mb-1">Fixed Asset Purchases</p>
+                <p className="text-red-400">-{fmt(data.cash.cashFixedAssets)}</p>
               </div>
               <div className="bg-zinc-900/50 rounded-lg p-3">
                 <p className="text-zinc-500 text-xs mb-1">Net Cash</p>
