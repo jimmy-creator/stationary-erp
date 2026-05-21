@@ -287,6 +287,14 @@ export function PurchaseOrderView() {
         <div className="p-4 lg:p-6 border-b border-zinc-800">
           <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
+              {store.logo_url && (
+                <img
+                  src={store.logo_url}
+                  alt=""
+                  className="mb-2"
+                  style={{ maxHeight: '60px', maxWidth: '220px', objectFit: 'contain' }}
+                />
+              )}
               <h1 className="text-2xl font-bold text-white">{store.store_name || 'PURCHASE ORDER'}</h1>
               {store.address && <p className="text-sm text-zinc-400 whitespace-pre-wrap">{store.address}</p>}
               {(store.phone || store.email) && (

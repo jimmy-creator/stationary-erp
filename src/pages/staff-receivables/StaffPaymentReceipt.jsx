@@ -10,7 +10,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-dig
 const DARK = '#111111'
 const GRAY = '#444444'
 const LIGHT_GRAY = '#666666'
-const GREEN = '#4a90c4'
+const DEFAULT_ACCENT = '#4a90c4'
 
 const METHOD_LABELS = {
   cash: 'Cash',
@@ -83,9 +83,10 @@ export function StaffPaymentReceipt() {
   const isAdjustment = payment.payment_method === 'discount'
   const docNumber = payment.receipt_number || (isAdjustment ? `Adjustment ${payment.id.substring(0, 8)}` : `Payment ${payment.id.substring(0, 8)}`)
   const employeeName = employee ? `${employee.first_name || ''} ${employee.last_name || ''}`.trim() : 'Employee'
+  const accent = store.invoice_header_color || DEFAULT_ACCENT
 
   return (
-    <div className="max-w-3xl mx-auto print-area">
+    <div className="max-w-3xl mx-auto print-area" style={{ '--invoice-accent': accent }}>
       <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-6 print-hide">
         <div>
           {employee && <Link to={`/staff-receivables/${employee.id}/collect`} className="text-teal-600 hover:underline text-sm mb-2 inline-block">&larr; Back to collection</Link>}
@@ -147,6 +148,13 @@ export function StaffPaymentReceipt() {
         printColorAdjust: 'exact',
       }}>
         <div style={{ marginBottom: '10px' }}>
+          {store.logo_url && (
+            <img
+              src={store.logo_url}
+              alt=""
+              style={{ maxHeight: '60px', maxWidth: '220px', marginBottom: '6px', objectFit: 'contain' }}
+            />
+          )}
           <div style={{ fontSize: '22px', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '4px', textTransform: 'uppercase', color: DARK }}>
             {store.store_name || 'BINTHAWAR ERP'}
           </div>
@@ -197,8 +205,8 @@ export function StaffPaymentReceipt() {
               </tr>
             )}
             <tr>
-              <td style={{ padding: '12px', backgroundImage: `linear-gradient(${GREEN}, ${GREEN})`, color: '#ffffff', borderTop: '2px solid #aaaaaa', fontSize: '12px', textTransform: 'uppercase', fontWeight: 700, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>Amount Received</td>
-              <td style={{ padding: '12px', backgroundImage: `linear-gradient(${GREEN}, ${GREEN})`, color: '#ffffff', borderTop: '2px solid #aaaaaa', fontSize: '18px', fontWeight: 700, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>QR {parseFloat(payment.amount || 0).toFixed(2)}</td>
+              <td style={{ padding: '12px', backgroundImage: `linear-gradient(${accent}, ${accent})`, color: '#ffffff', borderTop: '2px solid #aaaaaa', fontSize: '12px', textTransform: 'uppercase', fontWeight: 700, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>Amount Received</td>
+              <td style={{ padding: '12px', backgroundImage: `linear-gradient(${accent}, ${accent})`, color: '#ffffff', borderTop: '2px solid #aaaaaa', fontSize: '18px', fontWeight: 700, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>QR {parseFloat(payment.amount || 0).toFixed(2)}</td>
             </tr>
           </tbody>
         </table>

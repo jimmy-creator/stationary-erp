@@ -11,6 +11,8 @@ export function StoreSettings() {
     address: '',
     phone: '',
     email: '',
+    logo_url: '',
+    invoice_header_color: '#4a90c4',
   })
 
   useEffect(() => {
@@ -34,6 +36,8 @@ export function StoreSettings() {
           address: data.address || '',
           phone: data.phone || '',
           email: data.email || '',
+          logo_url: data.logo_url || '',
+          invoice_header_color: data.invoice_header_color || '#4a90c4',
         })
       }
     } catch (error) {
@@ -53,6 +57,8 @@ export function StoreSettings() {
         address: formData.address || null,
         phone: formData.phone || null,
         email: formData.email || null,
+        logo_url: formData.logo_url || null,
+        invoice_header_color: formData.invoice_header_color || '#4a90c4',
         updated_at: new Date().toISOString(),
       }
 
@@ -140,6 +146,36 @@ export function StoreSettings() {
                 className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
               />
             </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Logo URL</label>
+              <input
+                type="url"
+                value={formData.logo_url}
+                onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
+                placeholder="https://example.com/logo.png"
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+              />
+              <p className="text-xs text-zinc-500 mt-1">Shown on the print header of invoices, returns, receipts and statements.</p>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Invoice Header Color</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={formData.invoice_header_color}
+                  onChange={(e) => setFormData({ ...formData, invoice_header_color: e.target.value })}
+                  className="h-10 w-14 bg-zinc-800/50 border border-zinc-700 rounded-lg cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={formData.invoice_header_color}
+                  onChange={(e) => setFormData({ ...formData, invoice_header_color: e.target.value })}
+                  placeholder="#4a90c4"
+                  className="flex-1 bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
+                />
+              </div>
+              <p className="text-xs text-zinc-500 mt-1">Accent color used on table headers and totals in printed documents.</p>
+            </div>
           </div>
         </div>
 
@@ -147,11 +183,25 @@ export function StoreSettings() {
         <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
           <h2 className="text-lg font-medium text-white mb-4">Print Preview</h2>
           <div className="bg-white rounded-lg p-6 text-black">
+            {formData.logo_url && (
+              <img
+                src={formData.logo_url}
+                alt=""
+                style={{ maxHeight: '60px', maxWidth: '220px', objectFit: 'contain' }}
+                className="mb-2"
+              />
+            )}
             <h3 className="text-xl font-bold">{formData.store_name || 'Store Name'}</h3>
             {formData.address && <p className="text-sm text-gray-600 whitespace-pre-wrap mt-1">{formData.address}</p>}
             <div className="flex gap-4 mt-1">
               {formData.phone && <p className="text-sm text-gray-600">Tel: {formData.phone}</p>}
               {formData.email && <p className="text-sm text-gray-600">Email: {formData.email}</p>}
+            </div>
+            <div
+              className="mt-3 px-3 py-2 text-white text-xs font-semibold uppercase rounded"
+              style={{ backgroundColor: formData.invoice_header_color || '#4a90c4' }}
+            >
+              Sample Invoice Table Header
             </div>
           </div>
         </div>

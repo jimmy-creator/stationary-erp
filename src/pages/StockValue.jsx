@@ -12,7 +12,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-dig
 const DARK = '#111111'
 const GRAY = '#444444'
 const LIGHT_GRAY = '#666666'
-const HEADER_BG = '#4a90c4'
+const DEFAULT_ACCENT = '#4a90c4'
 
 const STOCK_STATUS_LABELS = { in: 'In Stock', low: 'Low Stock', out: 'Out of Stock' }
 const SORT_LABELS = {
@@ -126,8 +126,10 @@ export function StockValue() {
     ? categories.find((c) => c.id === filter.category)?.name
     : null
 
+  const accent = store.invoice_header_color || DEFAULT_ACCENT
+
   return (
-    <div className="print-area">
+    <div className="print-area" style={{ '--invoice-accent': accent }}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 print-hide">
         <h1 className="text-xl lg:text-2xl font-bold text-white">Stock Value Report</h1>
         <button
@@ -382,6 +384,13 @@ export function StockValue() {
       }}>
         {/* Store header */}
         <div style={{ marginBottom: '8px' }}>
+          {store.logo_url && (
+            <img
+              src={store.logo_url}
+              alt=""
+              style={{ maxHeight: '60px', maxWidth: '220px', marginBottom: '6px', objectFit: 'contain' }}
+            />
+          )}
           <div style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '4px', textTransform: 'uppercase', color: DARK }}>
             {store.store_name || 'BINTHAWAR ERP'}
           </div>
@@ -454,7 +463,7 @@ export function StockValue() {
                   { label: '% of Cost', align: 'right', width: '70px' },
                 ].map((col) => (
                   <th key={col.label} style={{
-                    backgroundImage: `linear-gradient(${HEADER_BG}, ${HEADER_BG})`,
+                    backgroundImage: `linear-gradient(${accent}, ${accent})`,
                     color: '#ffffff',
                     padding: '6px 8px',
                     textAlign: col.align,
@@ -519,7 +528,7 @@ export function StockValue() {
                   { label: 'Retail Value',align: 'right', width: '90px' },
                 ].map((col) => (
                   <th key={col.label} style={{
-                    backgroundImage: `linear-gradient(${HEADER_BG}, ${HEADER_BG})`,
+                    backgroundImage: `linear-gradient(${accent}, ${accent})`,
                     color: '#ffffff',
                     padding: '6px 7px',
                     textAlign: col.align,

@@ -43,7 +43,7 @@ const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
 
 // ─── Inline styles ────────────────────────────────────────────────────────────
-const GREEN = '#4a90c4'
+const DEFAULT_ACCENT = '#4a90c4'
 const DARK = '#111111'
 const GRAY = '#444444'   // safe for print on both Mac & Windows
 const LIGHT_GRAY = '#666666' // for least-important secondary text
@@ -126,9 +126,10 @@ export function SaleView() {
   }
 
   const balanceDue = (sale.grand_total || 0) - (sale.amount_paid || 0)
+  const accent = store.invoice_header_color || DEFAULT_ACCENT
 
   return (
-    <div className="max-w-4xl mx-auto print-area">
+    <div className="max-w-4xl mx-auto print-area" style={{ '--invoice-accent': accent }}>
 
       {/* ── Delete modal ── */}
       {showDeleteModal && (
@@ -261,6 +262,13 @@ export function SaleView() {
 
         {/* ── Store Header ── */}
         <div style={{ marginBottom: '10px' }}>
+          {store.logo_url && (
+            <img
+              src={store.logo_url}
+              alt=""
+              style={{ maxHeight: '60px', maxWidth: '220px', marginBottom: '6px', objectFit: 'contain' }}
+            />
+          )}
           <div style={{ fontSize: '22px', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '4px', textTransform: 'uppercase', color: DARK }}>
             {store.store_name || 'BINTHAWAR ERP'}
           </div>
@@ -327,7 +335,7 @@ export function SaleView() {
                 <th key={col.label} className="inv-white" style={{
                   // linear-gradient used instead of backgroundColor:
                   // it prints without "Background graphics" and has no stacking context side effects
-                  backgroundImage: `linear-gradient(${GREEN}, ${GREEN})`,
+                  backgroundImage: `linear-gradient(${accent}, ${accent})`,
                   padding: '7px 8px',
                   textAlign: col.align,
                   fontWeight: '700',

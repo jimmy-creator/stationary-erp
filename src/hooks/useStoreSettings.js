@@ -9,6 +9,8 @@ export function useStoreSettings() {
     address: '',
     phone: '',
     email: '',
+    logo_url: '',
+    invoice_header_color: '#4a90c4',
   })
   const [loading, setLoading] = useState(!cachedSettings)
 

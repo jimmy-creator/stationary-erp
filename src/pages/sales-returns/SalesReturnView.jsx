@@ -7,7 +7,7 @@ import { useStoreSettings } from '../../hooks/useStoreSettings'
 const fmt = (n) => `QR ${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
 
-const GREEN = '#4a90c4'
+const DEFAULT_ACCENT = '#4a90c4'
 const DARK = '#111111'
 const GRAY = '#444444'
 
@@ -125,8 +125,10 @@ export function SalesReturnView() {
     return <div className="text-center py-8"><p className="text-zinc-500">Return not found.</p><Link to="/sales-returns" className="text-teal-600 hover:underline">Back to list</Link></div>
   }
 
+  const accent = store.invoice_header_color || DEFAULT_ACCENT
+
   return (
-    <div className="max-w-4xl mx-auto print-area">
+    <div className="max-w-4xl mx-auto print-area" style={{ '--invoice-accent': accent }}>
 
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -235,6 +237,13 @@ export function SalesReturnView() {
         printColorAdjust: 'exact',
       }}>
         <div style={{ marginBottom: '10px' }}>
+          {store.logo_url && (
+            <img
+              src={store.logo_url}
+              alt=""
+              style={{ maxHeight: '60px', maxWidth: '220px', marginBottom: '6px', objectFit: 'contain' }}
+            />
+          )}
           <div style={{ fontSize: '22px', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '4px', textTransform: 'uppercase', color: DARK }}>
             {store.store_name || 'BINTHAWAR ERP'}
           </div>
@@ -282,7 +291,7 @@ export function SalesReturnView() {
                 { label: 'Amount',      align: 'right',  width: '90px'  },
               ].map((col) => (
                 <th key={col.label} style={{
-                  backgroundImage: `linear-gradient(${GREEN}, ${GREEN})`,
+                  backgroundImage: `linear-gradient(${accent}, ${accent})`,
                   color: '#ffffff',
                   padding: '7px 8px',
                   textAlign: col.align,
