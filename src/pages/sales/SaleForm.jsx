@@ -433,7 +433,7 @@ export function SaleForm() {
                     onChange={(productId) => handleProductChange(index, productId)}
                     onConfirm={() => focusQty(index)}
                     autoFocus={autoFocusIndex === index}
-                    showCost
+                    showCost={isAdmin}
                     className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
