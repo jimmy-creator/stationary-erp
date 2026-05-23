@@ -409,6 +409,7 @@ export function CustomerView() {
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
           <h2 className="text-lg font-medium text-white mb-4">Account Summary</h2>
           <div className="space-y-3">
+            {hasOpening && <div className="flex justify-between"><span className="text-zinc-500">Opening Balance</span><span className={`text-lg font-bold ${openingBalance > 0.01 ? 'text-red-400' : 'text-green-400'}`}>{fmtCurrencyScreen(openingBalance)}</span></div>}
             <div className="flex justify-between"><span className="text-zinc-500">Total Invoiced</span><span className="text-lg font-bold text-white">{fmtCurrencyScreen(totalSpent)}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Total Settled</span><span className="text-lg font-bold text-green-400">{fmtCurrencyScreen(totalPaid)}</span></div>
             <div className="flex justify-between border-t border-zinc-800 pt-3">
