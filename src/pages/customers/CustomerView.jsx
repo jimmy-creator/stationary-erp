@@ -343,6 +343,7 @@ export function CustomerView() {
         <div>
           <Link to="/customers" className="text-teal-600 hover:underline text-sm mb-2 inline-block">&larr; Back to list</Link>
           <h1 className="text-xl lg:text-2xl font-bold text-white">{customer.name}</h1>
+          {customer.customer_code && <p className="text-sm font-mono text-zinc-500 mt-1">{customer.customer_code}</p>}
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           {!isEmployee && <Link to={`/customers/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>}
@@ -501,7 +502,7 @@ export function CustomerView() {
             <div style={{ fontSize: '12px', marginBottom: '2px', color: DARK }}>
               Period: <strong>{fromDate || toDate ? `${fmtDate(fromDate) || '…'} to ${fmtDate(toDate) || '…'}` : 'All transactions'}</strong>
             </div>
-            <div style={{ fontSize: '12px', color: DARK }}>Customer ID: <strong>{customer.id.substring(0, 8)}</strong></div>
+            <div style={{ fontSize: '12px', color: DARK }}>Customer ID: <strong>{customer.customer_code || customer.id.substring(0, 8)}</strong></div>
           </div>
         </div>
 

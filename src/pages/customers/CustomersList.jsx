@@ -21,7 +21,7 @@ export function CustomersList() {
       let query = supabase.from('customers').select('*').order('name')
 
       if (debouncedSearch) {
-        query = query.or(`name.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`)
+        query = query.or(`name.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%,customer_code.ilike.%${debouncedSearch}%`)
       }
 
       const { data, error } = await query
@@ -54,7 +54,7 @@ export function CustomersList() {
       </div>
 
       <div className="mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search by name, phone, or email..." />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search by code, name, phone, or email..." />
       </div>
 
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 mb-6">
@@ -88,6 +88,7 @@ export function CustomersList() {
             <table className="min-w-full divide-y divide-slate-800">
               <thead className="bg-zinc-800/50">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Code</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Type</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase">Phone</th>
@@ -98,6 +99,7 @@ export function CustomersList() {
               <tbody className="divide-y divide-slate-800">
                 {filteredCustomers.map((customer) => (
                   <tr key={customer.id} className="hover:bg-zinc-800/50">
+                    <td className="px-6 py-4 text-sm font-mono text-zinc-400">{customer.customer_code || '-'}</td>
                     <td className="px-6 py-4 text-sm font-medium text-white">{customer.name}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeLabels[customer.customer_type]?.class || 'bg-zinc-800 text-zinc-300'}`}>
@@ -119,7 +121,10 @@ export function CustomersList() {
             {filteredCustomers.map((customer) => (
               <Link key={customer.id} to={`/customers/${customer.id}`} className="block bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 hover:bg-zinc-800/50 transition-colors">
                 <div className="flex justify-between items-start mb-2">
-                  <p className="font-medium text-white">{customer.name}</p>
+                  <div>
+                    {customer.customer_code && <p className="text-xs font-mono text-zinc-500">{customer.customer_code}</p>}
+                    <p className="font-medium text-white">{customer.name}</p>
+                  </div>
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeLabels[customer.customer_type]?.class}`}>
                     {typeLabels[customer.customer_type]?.label}
                   </span>
