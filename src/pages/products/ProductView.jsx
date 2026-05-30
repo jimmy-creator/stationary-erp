@@ -17,6 +17,7 @@ export function ProductView() {
   const [totalSoldQty, setTotalSoldQty] = useState(0)
   const [totalPurchasedQty, setTotalPurchasedQty] = useState(0)
   const [totalReturnedQty, setTotalReturnedQty] = useState(0)
+  const [openingStock, setOpeningStock] = useState(0)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -33,7 +34,7 @@ export function ProductView() {
 
   const fetchProduct = async () => {
     try {
-      const [productRes, adjustmentsRes, salesRes, posRes, allSalesRes, allPosRes, returnsRes, allReturnsRes, manualAdjRes] = await Promise.all([
+      const [productRes, adjustmentsRes, salesRes, posRes, allSalesRes, allPosRes, returnsRes, allReturnsRes, manualAdjRes, allSalesReturnsRes] = await Promise.all([
         supabase.from('products').select('*, categories(name)').eq('id', id).single(),
         supabase.from('stock_adjustments').select('*').eq('product_id', id).order('created_at', { ascending: false }).limit(20),
         supabase
@@ -55,7 +56,7 @@ export function ProductView() {
           .neq('sales.status', 'cancelled'),
         supabase
           .from('purchase_order_items')
-          .select('quantity, purchase_orders!inner(status)')
+          .select('quantity, applied_quantity, purchase_orders!inner(status)')
           .eq('product_id', id)
           .neq('purchase_orders.status', 'cancelled'),
         supabase
@@ -66,7 +67,7 @@ export function ProductView() {
           .limit(10),
         supabase
           .from('purchase_return_items')
-          .select('quantity, purchase_returns!inner(status)')
+          .select('quantity, applied_quantity, purchase_returns!inner(status)')
           .eq('product_id', id)
           .neq('purchase_returns.status', 'cancelled'),
         supabase
@@ -75,6 +76,11 @@ export function ProductView() {
           .eq('product_id', id)
           .order('created_at', { ascending: false })
           .limit(50),
+        supabase
+          .from('sales_return_items')
+          .select('applied_quantity, sales_returns!inner(status)')
+          .eq('product_id', id)
+          .neq('sales_returns.status', 'cancelled'),
       ])
       if (productRes.error) throw productRes.error
       setProduct(productRes.data)
@@ -85,12 +91,29 @@ export function ProductView() {
       // Manual adjustments = hand-entered via the Adjust Stock form. PO-driven
       // deltas always carry a reason beginning with "PO "; everything else
       // (null reason or a user-typed note) is treated as manual.
-      setManualAdjustments(
-        (manualAdjRes.data || []).filter((a) => !a.reason || !/^PO\s/i.test(a.reason)).slice(0, 10)
-      )
-      setTotalSoldQty((allSalesRes.data || []).reduce((sum, r) => sum + (Number(r.quantity) || 0), 0))
+      const manualAll = (manualAdjRes.data || []).filter((a) => !a.reason || !/^PO\s/i.test(a.reason))
+      setManualAdjustments(manualAll.slice(0, 10))
+
+      const soldQty = (allSalesRes.data || []).reduce((sum, r) => sum + (Number(r.quantity) || 0), 0)
+      setTotalSoldQty(soldQty)
       setTotalPurchasedQty((allPosRes.data || []).reduce((sum, r) => sum + (Number(r.quantity) || 0), 0))
       setTotalReturnedQty((allReturnsRes.data || []).reduce((sum, r) => sum + (Number(r.quantity) || 0), 0))
+
+      // Opening stock = the quantity the product was created with, derived by
+      // backing every movement that has hit stock_quantity since back out:
+      //   opening = current − appliedPO + sold + appliedPurchaseReturns
+      //             − appliedSalesReturns − manualAdjustmentsNet
+      // Uses applied_quantity (the real per-line stock contribution) so it stays
+      // correct for un-received POs and partially-applied returns. PO-driven
+      // stock_adjustments are excluded from manualNet to avoid double-counting
+      // (they're already captured by appliedPO).
+      const appliedPO = (allPosRes.data || []).reduce((sum, r) => sum + (Number(r.applied_quantity) || 0), 0)
+      const appliedPurchaseReturns = (allReturnsRes.data || []).reduce((sum, r) => sum + (Number(r.applied_quantity) || 0), 0)
+      const appliedSalesReturns = (allSalesReturnsRes.data || []).reduce((sum, r) => sum + (Number(r.applied_quantity) || 0), 0)
+      const manualNet = manualAll.reduce((sum, a) => sum + ((Number(a.new_stock) || 0) - (Number(a.previous_stock) || 0)), 0)
+      const current = Number(productRes.data?.stock_quantity) || 0
+      const opening = current - appliedPO + soldQty + appliedPurchaseReturns - appliedSalesReturns - manualNet
+      setOpeningStock(Math.round(opening * 1000) / 1000)
     } catch (error) {
       console.error('Error fetching product:', error)
       // Fallback if stock_adjustments table doesn't exist
@@ -286,6 +309,7 @@ export function ProductView() {
             <div className="flex justify-between"><span className="text-zinc-500">Cost Price</span><span className="text-zinc-300">{formatCurrency(product.cost_price)}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Selling Price</span><span className="text-xl font-bold text-white">{formatCurrency(product.selling_price)}</span></div>
             {margin && <div className="flex justify-between"><span className="text-zinc-500">Margin</span><span className="text-emerald-400 font-medium">{margin}%</span></div>}
+            <div className="flex justify-between"><span className="text-zinc-500">Opening Stock</span><span className="text-zinc-300">{openingStock} {product.unit}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Stock</span><span className="text-zinc-300">{product.stock_quantity} {product.unit}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Reorder Level</span><span className="text-zinc-300">{product.reorder_level} {product.unit}</span></div>
             <div className="flex justify-between"><span className="text-zinc-500">Stock Value</span><span className="text-zinc-300">{formatCurrency(product.stock_quantity * product.cost_price)}</span></div>
