@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Package, Tag, AlertTriangle, Plus, Minus, RotateCcw, ShoppingCart, Truck } from 'lucide-react'
+import { Package, Tag, AlertTriangle, Plus, Minus, RotateCcw, ShoppingCart, Truck, Pencil } from 'lucide-react'
 
 export function ProductView() {
   const { id } = useParams()
@@ -12,8 +12,11 @@ export function ProductView() {
   const [adjustments, setAdjustments] = useState([])
   const [recentSales, setRecentSales] = useState([])
   const [recentPOs, setRecentPOs] = useState([])
+  const [recentReturns, setRecentReturns] = useState([])
+  const [manualAdjustments, setManualAdjustments] = useState([])
   const [totalSoldQty, setTotalSoldQty] = useState(0)
   const [totalPurchasedQty, setTotalPurchasedQty] = useState(0)
+  const [totalReturnedQty, setTotalReturnedQty] = useState(0)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -30,7 +33,7 @@ export function ProductView() {
 
   const fetchProduct = async () => {
     try {
-      const [productRes, adjustmentsRes, salesRes, posRes, allSalesRes, allPosRes] = await Promise.all([
+      const [productRes, adjustmentsRes, salesRes, posRes, allSalesRes, allPosRes, returnsRes, allReturnsRes, manualAdjRes] = await Promise.all([
         supabase.from('products').select('*, categories(name)').eq('id', id).single(),
         supabase.from('stock_adjustments').select('*').eq('product_id', id).order('created_at', { ascending: false }).limit(20),
         supabase
@@ -55,14 +58,39 @@ export function ProductView() {
           .select('quantity, purchase_orders!inner(status)')
           .eq('product_id', id)
           .neq('purchase_orders.status', 'cancelled'),
+        supabase
+          .from('purchase_return_items')
+          .select('id, quantity, unit_price, total_price, return_id, purchase_returns(return_number, return_date, supplier_name, status)')
+          .eq('product_id', id)
+          .order('created_at', { ascending: false })
+          .limit(10),
+        supabase
+          .from('purchase_return_items')
+          .select('quantity, purchase_returns!inner(status)')
+          .eq('product_id', id)
+          .neq('purchase_returns.status', 'cancelled'),
+        supabase
+          .from('stock_adjustments')
+          .select('*')
+          .eq('product_id', id)
+          .order('created_at', { ascending: false })
+          .limit(50),
       ])
       if (productRes.error) throw productRes.error
       setProduct(productRes.data)
       setAdjustments(adjustmentsRes.data || [])
       setRecentSales((salesRes.data || []).filter((row) => row.sales))
       setRecentPOs((posRes.data || []).filter((row) => row.purchase_orders))
+      setRecentReturns((returnsRes.data || []).filter((row) => row.purchase_returns))
+      // Manual adjustments = hand-entered via the Adjust Stock form. PO-driven
+      // deltas always carry a reason beginning with "PO "; everything else
+      // (null reason or a user-typed note) is treated as manual.
+      setManualAdjustments(
+        (manualAdjRes.data || []).filter((a) => !a.reason || !/^PO\s/i.test(a.reason)).slice(0, 10)
+      )
       setTotalSoldQty((allSalesRes.data || []).reduce((sum, r) => sum + (Number(r.quantity) || 0), 0))
       setTotalPurchasedQty((allPosRes.data || []).reduce((sum, r) => sum + (Number(r.quantity) || 0), 0))
+      setTotalReturnedQty((allReturnsRes.data || []).reduce((sum, r) => sum + (Number(r.quantity) || 0), 0))
     } catch (error) {
       console.error('Error fetching product:', error)
       // Fallback if stock_adjustments table doesn't exist
@@ -438,6 +466,85 @@ export function ProductView() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Recent Purchase Returns */}
+      <div className="mt-6 bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <h2 className="text-lg font-medium text-white flex items-center gap-2">
+            <RotateCcw className="w-5 h-5 text-rose-400" />
+            Recent Purchase Returns
+          </h2>
+          <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 whitespace-nowrap">
+            Total returned: {totalReturnedQty} {product.unit}
+          </span>
+        </div>
+        {recentReturns.length === 0 ? (
+          <p className="text-sm text-zinc-500">No purchase returns for this product yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {recentReturns.map((row) => (
+              <Link
+                key={row.id}
+                to={`/purchase-returns/${row.return_id}`}
+                className="block bg-zinc-800/30 hover:bg-zinc-800/60 rounded-lg p-3 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-rose-400">{row.purchase_returns.return_number}</span>
+                      {row.purchase_returns.status === 'cancelled' && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-900/50 text-red-400">Cancelled</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-zinc-500 mt-0.5 truncate">
+                      {formatDate(row.purchase_returns.return_date)} • {row.purchase_returns.supplier_name || '-'}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm text-zinc-300">{row.quantity} × {formatCurrency(row.unit_price)}</div>
+                    <div className="text-xs text-zinc-500">{formatCurrency(row.total_price)}</div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Manual Stock Adjustments */}
+      <div className="mt-6 bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+        <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <Pencil className="w-5 h-5 text-sky-400" />
+          Manual Stock Adjustments
+        </h2>
+        {manualAdjustments.length === 0 ? (
+          <p className="text-sm text-zinc-500">No manual stock adjustments for this product yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {manualAdjustments.map((adj) => (
+              <div key={adj.id} className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3">
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                      adj.adjustment_type === 'add' ? 'bg-green-900/50 text-green-400' :
+                      adj.adjustment_type === 'remove' ? 'bg-red-900/50 text-red-400' :
+                      'bg-blue-900/50 text-blue-400'
+                    }`}>
+                      {adj.adjustment_type === 'add' ? '+' : adj.adjustment_type === 'remove' ? '-' : '='}{adj.quantity}
+                    </span>
+                    <span className="text-sm text-zinc-400">{adj.previous_stock} → {adj.new_stock}</span>
+                    {adj.reason && <span className="text-sm text-zinc-500">• {adj.reason}</span>}
+                  </div>
+                  <div className="flex gap-2 mt-1">
+                    <span className="text-xs text-zinc-600">{formatDate(adj.created_at)} {formatTime(adj.created_at)}</span>
+                    {adj.created_by_email && <span className="text-xs text-zinc-600">by {adj.created_by_email.split('@')[0]}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Adjustment History */}
