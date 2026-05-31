@@ -79,7 +79,7 @@ export function SaleView() {
       if (saleRes.data.customer_id) {
         const { data: cust } = await supabase
           .from('customers')
-          .select('address, phone')
+          .select('customer_code, address, phone')
           .eq('id', saleRes.data.customer_id)
           .single()
         setCustomer(cust)
@@ -304,6 +304,9 @@ export function SaleView() {
           <div>
             <div style={{ fontSize: '11px', color: GRAY, marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '700' }}>Bill To</div>
             <div style={{ fontSize: '16px', fontWeight: '700', color: DARK }}>{sale.customer_name || 'Walk-in Customer'}</div>
+            {customer?.customer_code && (
+              <div style={{ fontSize: '12px', color: GRAY, marginTop: '2px' }}>{customer.customer_code}</div>
+            )}
             {customer?.address && (
               <div style={{ fontSize: '12px', color: GRAY, marginTop: '2px', whiteSpace: 'pre-wrap' }}>{customer.address}</div>
             )}

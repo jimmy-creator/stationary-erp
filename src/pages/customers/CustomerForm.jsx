@@ -98,12 +98,10 @@ export function CustomerForm() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {isEditing && customerCode && (
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-zinc-300 mb-1">Customer Code</label>
-                <input type="text" value={customerCode} readOnly className="w-full bg-zinc-800/30 border border-zinc-700 rounded-xl text-zinc-400 font-mono px-3 py-2 cursor-not-allowed" />
-              </div>
-            )}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-zinc-300 mb-1">Customer Code</label>
+              <input type="text" value={customerCode} readOnly placeholder={isEditing ? '' : 'Auto-generated on save'} className="w-full bg-zinc-800/30 border border-zinc-700 rounded-xl text-zinc-400 font-mono placeholder-zinc-500 px-3 py-2 cursor-not-allowed" />
+            </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-zinc-300 mb-1">Customer Name *</label>
               <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
