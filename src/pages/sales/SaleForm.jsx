@@ -33,7 +33,7 @@ export function SaleForm() {
     status: 'completed',
   })
 
-  const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0 }])
+  const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0, entry_unit: 'base' }])
   const [lastPrices, setLastPrices] = useState({}) // { product_id: last_unit_price }
   const [autoFocusIndex, setAutoFocusIndex] = useState(null)
 
@@ -47,7 +47,7 @@ export function SaleForm() {
   const fetchData = async () => {
     const [customersRes, productsRes, salespeopleRes] = await Promise.all([
       supabase.from('customers').select('id, name, phone').eq('is_active', true).order('name'),
-      supabase.from('products').select('id, name, selling_price, cost_price, stock_quantity, unit').eq('is_active', true).order('name'),
+      supabase.from('products').select('id, name, selling_price, cost_price, stock_quantity, unit, secondary_unit, unit_conversion').eq('is_active', true).order('name'),
       supabase.from('profiles').select('id, email').order('email'),
     ])
     setCustomers(customersRes.data || [])
@@ -143,6 +143,16 @@ export function SaleForm() {
     }
   }
 
+  const round = (n, d = 3) => { const f = 10 ** d; return Math.round((Number(n) || 0) * f) / f }
+  // For products with a sub-unit (1 base = conv sub-units), lets a line be
+  // entered in either unit. Canonical state stays in base units; only the
+  // Qty/Price inputs convert for display/entry. Returns null when no sub-unit.
+  const subUnitInfo = (item) => {
+    const p = products.find((pp) => pp.id === item.product_id)
+    const conv = Number(p?.unit_conversion) || 0
+    return p?.secondary_unit && conv > 0 ? { secondary: p.secondary_unit, base: p.unit || 'Unit', conv } : null
+  }
+
   const handleProductChange = (index, productId) => {
     const product = products.find((p) => p.id === productId)
     // Use last price for this customer if available, otherwise default selling price
@@ -153,6 +163,7 @@ export function SaleForm() {
       ...newItems[index],
       product_id: productId,
       product_name: product?.name || '',
+      entry_unit: 'base',
       unit_price: price,
       total_price: price * newItems[index].quantity,
     }
@@ -161,21 +172,33 @@ export function SaleForm() {
 
   const handleQuantityChange = (index, quantity) => {
     const newItems = [...items]
-    newItems[index].quantity = parseFloat(quantity) || 0
-    newItems[index].total_price = newItems[index].unit_price * newItems[index].quantity
+    const item = newItems[index]
+    const info = subUnitInfo(item)
+    const entered = parseFloat(quantity) || 0
+    item.quantity = info && item.entry_unit === 'sub' ? entered / info.conv : entered
+    item.total_price = item.unit_price * item.quantity
     setItems(newItems)
   }
 
   const handleUnitPriceChange = (index, price) => {
     const newItems = [...items]
-    newItems[index].unit_price = parseFloat(price) || 0
-    newItems[index].total_price = newItems[index].unit_price * newItems[index].quantity
+    const item = newItems[index]
+    const info = subUnitInfo(item)
+    const entered = parseFloat(price) || 0
+    item.unit_price = info && item.entry_unit === 'sub' ? entered * info.conv : entered
+    item.total_price = item.unit_price * item.quantity
+    setItems(newItems)
+  }
+
+  const handleEntryUnitChange = (index, entryUnit) => {
+    const newItems = [...items]
+    newItems[index].entry_unit = entryUnit
     setItems(newItems)
   }
 
   const addItem = useCallback(() => {
     setItems((prev) => {
-      const next = [...prev, { product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0 }]
+      const next = [...prev, { product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0, entry_unit: 'base' }]
       setAutoFocusIndex(next.length - 1)
       return next
     })
@@ -423,7 +446,11 @@ export function SaleForm() {
           </div>
 
           <div className="space-y-3">
-            {items.map((item, index) => (
+            {items.map((item, index) => {
+              const info = subUnitInfo(item)
+              const qtyDisplay = info && item.entry_unit === 'sub' ? round(item.quantity * info.conv) : item.quantity
+              const priceDisplay = info && item.entry_unit === 'sub' ? round(item.unit_price / info.conv, 4) : item.unit_price
+              return (
               <div key={index} className="grid grid-cols-12 gap-2 items-end bg-zinc-800/30 rounded-lg p-3">
                 <div className="col-span-12 md:col-span-5">
                   <label className="block text-xs text-zinc-400 mb-1">Product</label>
@@ -439,11 +466,21 @@ export function SaleForm() {
                 </div>
                 <div className="col-span-4 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Qty</label>
-                  <input data-qty-input type="number" min="0" step="any" value={item.quantity} onChange={(e) => handleQuantityChange(index, e.target.value)} onKeyDown={(e) => handleQtyKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  <input data-qty-input type="number" min="0" step="any" value={qtyDisplay} onChange={(e) => handleQuantityChange(index, e.target.value)} onKeyDown={(e) => handleQtyKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  {info && (
+                    <select
+                      value={item.entry_unit === 'sub' ? 'sub' : 'base'}
+                      onChange={(e) => handleEntryUnitChange(index, e.target.value)}
+                      className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-zinc-300 text-xs px-2 py-1 mt-1 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    >
+                      <option value="base">{info.base}</option>
+                      <option value="sub">{info.secondary}</option>
+                    </select>
+                  )}
                 </div>
                 <div className="col-span-4 md:col-span-2">
                   <label className="block text-xs text-zinc-400 mb-1">Price</label>
-                  <input data-price-input type="number" min="0" step="0.01" value={item.unit_price} onChange={(e) => handleUnitPriceChange(index, e.target.value)} onKeyDown={(e) => handlePriceKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                  <input data-price-input type="number" min="0" step="0.01" value={priceDisplay} onChange={(e) => handleUnitPriceChange(index, e.target.value)} onKeyDown={(e) => handlePriceKeyDown(e, index)} className="w-full bg-zinc-700/50 border border-zinc-600 rounded-lg text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500" />
                   {item.product_id && lastPrices[item.product_id] !== undefined && (
                     <button
                       type="button"
@@ -456,7 +493,7 @@ export function SaleForm() {
                       }}
                       className={`text-xs mt-1 ${item.unit_price === lastPrices[item.product_id] ? 'text-teal-500' : 'text-amber-400 hover:text-amber-300 cursor-pointer'}`}
                     >
-                      Last: QAR {parseFloat(lastPrices[item.product_id]).toFixed(2)}
+                      Last: QAR {(info && item.entry_unit === 'sub' ? round(lastPrices[item.product_id] / info.conv, 4) : parseFloat(lastPrices[item.product_id]) || 0).toFixed(2)}
                       {item.unit_price !== lastPrices[item.product_id] && ' (click to apply)'}
                     </button>
                   )}
@@ -471,7 +508,8 @@ export function SaleForm() {
                   </button>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Totals */}
