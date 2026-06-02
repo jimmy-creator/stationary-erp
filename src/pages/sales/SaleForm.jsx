@@ -25,6 +25,8 @@ export function SaleForm() {
     salesperson_id: '',
     salesperson_name: '',
     discount_percentage: '0',
+    discount_amount: '0',
+    discount_mode: 'amount',
     tax_percentage: '0',
     payment_method: 'cash',
     payment_status: 'paid',
@@ -73,6 +75,8 @@ export function SaleForm() {
         salesperson_id: sale.salesperson_id || '',
         salesperson_name: sale.salesperson_name || '',
         discount_percentage: sale.discount_percentage?.toString() || '0',
+        discount_amount: sale.discount_amount?.toString() || '0',
+        discount_mode: (!sale.discount_percentage && sale.discount_amount) ? 'amount' : 'percent',
         tax_percentage: sale.tax_percentage?.toString() || '15',
         payment_method: sale.payment_method || 'cash',
         payment_status: sale.payment_status || 'paid',
@@ -254,7 +258,14 @@ export function SaleForm() {
   }
 
   const subtotal = items.reduce((sum, item) => sum + item.total_price, 0)
-  const discountAmount = subtotal * (parseFloat(formData.discount_percentage) || 0) / 100
+  const discountAmount = Math.min(
+    formData.discount_mode === 'amount'
+      ? (parseFloat(formData.discount_amount) || 0)
+      : subtotal * (parseFloat(formData.discount_percentage) || 0) / 100,
+    subtotal
+  )
+  // Effective % equivalent — drives the per-line minimum-price check and what we store
+  const effectiveDiscountPct = subtotal > 0 ? (discountAmount / subtotal) * 100 : 0
   const afterDiscount = subtotal - discountAmount
   const taxAmount = afterDiscount * (parseFloat(formData.tax_percentage) || 0) / 100
   const grandTotal = afterDiscount + taxAmount
@@ -282,7 +293,7 @@ export function SaleForm() {
     }
 
     // Minimum price check — no item should go below 90% of selling price after discount
-    const discountPct = parseFloat(formData.discount_percentage) || 0
+    const discountPct = effectiveDiscountPct
     for (const item of validItems) {
       if (item.product_id) {
         const product = products.find((p) => p.id === item.product_id)
@@ -310,7 +321,7 @@ export function SaleForm() {
         customer_id: formData.customer_id || null,
         customer_name: formData.customer_name || null,
         subtotal,
-        discount_percentage: parseFloat(formData.discount_percentage) || 0,
+        discount_percentage: formData.discount_mode === 'amount' ? 0 : (parseFloat(formData.discount_percentage) || 0),
         discount_amount: discountAmount,
         tax_percentage: parseFloat(formData.tax_percentage) || 0,
         tax_amount: taxAmount,
@@ -519,8 +530,15 @@ export function SaleForm() {
               <div className="flex items-center justify-between text-sm gap-2">
                 <span className="text-zinc-400">Discount:</span>
                 <div className="flex items-center gap-1">
-                  <input type="number" min="0" max="100" step="0.1" value={formData.discount_percentage} onChange={(e) => setFormData({ ...formData, discount_percentage: e.target.value })} className="w-16 bg-zinc-700/50 border border-zinc-600 rounded text-white text-sm text-right px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500" />
-                  <span className="text-zinc-500 text-xs">%</span>
+                  <select value={formData.discount_mode} onChange={(e) => setFormData({ ...formData, discount_mode: e.target.value })} className="bg-zinc-700/50 border border-zinc-600 rounded text-zinc-300 text-xs px-1 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                    <option value="percent">%</option>
+                    <option value="amount">QAR</option>
+                  </select>
+                  {formData.discount_mode === 'amount' ? (
+                    <input type="number" min="0" step="0.01" value={formData.discount_amount} onChange={(e) => setFormData({ ...formData, discount_amount: e.target.value })} className="w-20 bg-zinc-700/50 border border-zinc-600 rounded text-white text-sm text-right px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                  ) : (
+                    <input type="number" min="0" max="100" step="0.1" value={formData.discount_percentage} onChange={(e) => setFormData({ ...formData, discount_percentage: e.target.value })} className="w-16 bg-zinc-700/50 border border-zinc-600 rounded text-white text-sm text-right px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500" />
+                  )}
                   <span className="text-red-400 ml-2">-QAR {discountAmount.toFixed(2)}</span>
                 </div>
               </div>
