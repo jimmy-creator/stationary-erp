@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Banknote, CreditCard, ArrowUpRight, ArrowDownRight, TrendingUp } from 'lucide-react'
+import { useStoreSettings } from '../hooks/useStoreSettings'
+import { Banknote, CreditCard, ArrowUpRight, ArrowDownRight, TrendingUp, Printer } from 'lucide-react'
 
 export function DailyCash() {
+  const { settings: store } = useStoreSettings()
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [salesData, setSalesData] = useState([])
@@ -194,12 +196,228 @@ export function DailyCash() {
     setSelectedDate(d.toISOString().split('T')[0])
   }
 
+  const fmtPrintDate = (d) => new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const { from: printFrom, to: printTo } = getDateFilter()
+  const printPeriod = viewMode === 'daily' ? fmtPrintDate(selectedDate) : `${fmtPrintDate(printFrom)} — ${fmtPrintDate(printTo)}`
+
   if (loading) {
     return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600"></div></div>
   }
 
   return (
     <div>
+      {/* ══ Printable Report ══ */}
+      <div className="hidden print:block print-area">
+        <div style={{ padding: '28px 32px' }}>
+          <h1 style={{ fontSize: '18pt', fontWeight: 700, marginBottom: '2px', color: '#111' }}>{store.store_name}</h1>
+          {store.address && <p style={{ fontSize: '9pt', color: '#666', whiteSpace: 'pre-wrap', margin: 0 }}>{store.address}</p>}
+          {(store.phone || store.email) && (
+            <p style={{ fontSize: '9pt', color: '#666', margin: 0 }}>
+              {store.phone && `Tel: ${store.phone}`}
+              {store.phone && store.email && ' | '}
+              {store.email}
+            </p>
+          )}
+
+          <h2 style={{ fontSize: '14pt', fontWeight: 600, marginTop: '12px', marginBottom: '4px', color: '#111' }}>Daily Cash Summary</h2>
+          <p style={{ fontSize: '10pt', color: '#666', marginBottom: '20px' }}>{printPeriod}</p>
+
+          {/* Summary */}
+          <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', borderBottom: '2px solid #e5e7eb', paddingBottom: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontSize: '8pt', color: '#666', textTransform: 'uppercase', margin: 0 }}>Total Income</p>
+              <p style={{ fontSize: '14pt', fontWeight: 700, color: '#16a34a', margin: 0 }}>{formatCurrency(totalIn)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '8pt', color: '#666', textTransform: 'uppercase', margin: 0 }}>Total Expenses</p>
+              <p style={{ fontSize: '14pt', fontWeight: 700, color: '#dc2626', margin: 0 }}>{formatCurrency(totalOut)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '8pt', color: '#666', textTransform: 'uppercase', margin: 0 }}>Net</p>
+              <p style={{ fontSize: '14pt', fontWeight: 700, color: netTotal >= 0 ? '#16a34a' : '#dc2626', margin: 0 }}>{formatCurrency(netTotal)}</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '8pt', color: '#666', textTransform: 'uppercase', margin: 0 }}>Sales Revenue</p>
+              <p style={{ fontSize: '14pt', fontWeight: 700, color: '#111', margin: 0 }}>{formatCurrency(totalSalesRevenue)}</p>
+            </div>
+          </div>
+
+          {/* Cash vs Bank breakdown */}
+          <div style={{ display: 'flex', gap: '32px', marginBottom: '24px', flexWrap: 'wrap' }}>
+            <table style={{ flex: 1, minWidth: '260px', borderCollapse: 'collapse', fontSize: '9pt' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #16a34a' }}>
+                  <th colSpan={2} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Cash Register</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Sales</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cashSales)}</td></tr>
+                {cashCollections > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Collections</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cashCollections)}</td></tr>}
+                {cashOpeningCollections > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Opening Balance Collections</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cashOpeningCollections)}</td></tr>}
+                {cashExpenses > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Expenses</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(cashExpenses)}</td></tr>}
+                {cashPOPayments > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Supplier Payments</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(cashPOPayments)}</td></tr>}
+                <tr style={{ borderTop: '2px solid #d1d5db' }}><td style={{ padding: '6px', fontWeight: 700, color: '#111' }}>Net Cash</td><td style={{ padding: '6px', textAlign: 'right', fontWeight: 700, color: netCash >= 0 ? '#16a34a' : '#dc2626' }}>{formatCurrency(netCash)}</td></tr>
+              </tbody>
+            </table>
+            <table style={{ flex: 1, minWidth: '260px', borderCollapse: 'collapse', fontSize: '9pt' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #4a90c4' }}>
+                  <th colSpan={2} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Bank / Card</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cardSales > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Card Sales</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cardSales)}</td></tr>}
+                {bankSales > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Bank Transfer Sales</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(bankSales)}</td></tr>}
+                {(cardCollections + bankCollections) > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Bank/Card Collections</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cardCollections + bankCollections)}</td></tr>}
+                {(cardOpeningCollections + bankOpeningCollections) > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Opening Balance Collections</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cardOpeningCollections + bankOpeningCollections)}</td></tr>}
+                {bankExpenses > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Bank Expenses</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(bankExpenses)}</td></tr>}
+                {bankPOPayments > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Bank Supplier Payments</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(bankPOPayments)}</td></tr>}
+                <tr style={{ borderTop: '2px solid #d1d5db' }}><td style={{ padding: '6px', fontWeight: 700, color: '#111' }}>Net Bank</td><td style={{ padding: '6px', textAlign: 'right', fontWeight: 700, color: netBank >= 0 ? '#16a34a' : '#dc2626' }}>{formatCurrency(netBank)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Sales */}
+          {salesData.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '18px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #16a34a' }}>
+                  <th colSpan={3} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Sales ({salesData.length})</th>
+                  <th style={{ textAlign: 'right', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>{formatCurrency(totalSalesReceived)}</th>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #d1d5db' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Invoice</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Customer</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Method</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Received</th>
+                </tr>
+              </thead>
+              <tbody>
+                {salesData.map((s) => (
+                  <tr key={s.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '5px 6px', color: '#111', fontWeight: 500 }}>{s.invoice_number}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{s.customer_name || 'Walk-in'}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{paymentMethodLabels[s.payment_method] || s.payment_method}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#16a34a' }}>
+                      +{formatCurrency(s.amount_paid)}
+                      {parseFloat(s.amount_paid) !== parseFloat(s.grand_total) && <span style={{ color: '#999', fontWeight: 400 }}> / {formatCurrency(s.grand_total)}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Payment Collections */}
+          {realCollections.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '18px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #16a34a' }}>
+                  <th colSpan={2} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Payment Collections ({realCollections.length})</th>
+                  <th style={{ textAlign: 'right', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>{formatCurrency(totalCollections)}</th>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #d1d5db' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Method</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Reference</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {realCollections.map((c) => (
+                  <tr key={c.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{paymentMethodLabels[c.payment_method] || c.payment_method}</td>
+                    <td style={{ padding: '5px 6px', color: '#666' }}>{c.reference || '-'}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#16a34a' }}>+{formatCurrency(c.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Opening Balance Collections */}
+          {realOpeningCollections.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '18px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #16a34a' }}>
+                  <th colSpan={2} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Opening Balance Collections ({realOpeningCollections.length})</th>
+                  <th style={{ textAlign: 'right', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>{formatCurrency(totalOpeningCollections)}</th>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #d1d5db' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Customer</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Method</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {realOpeningCollections.map((c) => (
+                  <tr key={c.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{c.customers?.name || 'Customer'}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{paymentMethodLabels[c.payment_method] || c.payment_method}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#16a34a' }}>+{formatCurrency(c.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Expenses */}
+          {expensesData.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '18px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #dc2626' }}>
+                  <th colSpan={3} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Expenses ({expensesData.length})</th>
+                  <th style={{ textAlign: 'right', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>{formatCurrency(totalExpenses)}</th>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #d1d5db' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Description</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Category</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Method</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expensesData.map((e) => (
+                  <tr key={e.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '5px 6px', color: '#111' }}>{e.description}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{categoryLabels[e.category] || e.category}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{paymentMethodLabels[e.payment_method] || e.payment_method}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>-{formatCurrency(e.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Supplier Payments */}
+          {poPaymentsData.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '18px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #dc2626' }}>
+                  <th colSpan={2} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Supplier Payments ({poPaymentsData.length})</th>
+                  <th style={{ textAlign: 'right', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>{formatCurrency(totalPOPayments)}</th>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #d1d5db' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Type</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Reference</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {poPaymentsData.map((p) => (
+                  <tr key={p.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>PO Payment</td>
+                    <td style={{ padding: '5px 6px', color: '#666' }}>{p.reference || '-'}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>-{formatCurrency(p.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* ══ Screen UI ══ */}
+      <div className="print:hidden">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h1 className="text-xl lg:text-2xl font-bold text-white">Daily Cash Summary</h1>
         <div className="flex gap-2">
@@ -208,6 +426,9 @@ export function DailyCash() {
           </button>
           <button onClick={() => setViewMode('range')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${viewMode === 'range' ? 'bg-teal-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>
             Date Range
+          </button>
+          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-zinc-300 hover:bg-zinc-700 transition-colors">
+            <Printer className="w-4 h-4" /> Print
           </button>
         </div>
       </div>
@@ -455,6 +676,7 @@ export function DailyCash() {
             No transactions for this {viewMode === 'daily' ? 'date' : 'period'}.
           </div>
         )}
+      </div>
       </div>
     </div>
   )
