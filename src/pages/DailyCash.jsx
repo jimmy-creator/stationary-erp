@@ -73,7 +73,7 @@ export function DailyCash() {
         // PO payments for the date(s)
         supabase
           .from('po_payments')
-          .select('id, po_id, amount, payment_method, payment_date, reference')
+          .select('id, po_id, amount, payment_method, payment_date, reference, purchase_orders!po_id(po_number, supplier_name)')
           .gte('payment_date', from)
           .lte('payment_date', to)
           .order('created_at', { ascending: false })
@@ -393,20 +393,22 @@ export function DailyCash() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '18px' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #dc2626' }}>
-                  <th colSpan={2} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Supplier Payments ({poPaymentsData.length})</th>
+                  <th colSpan={3} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Supplier Payments ({poPaymentsData.length})</th>
                   <th style={{ textAlign: 'right', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>{formatCurrency(totalPOPayments)}</th>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #d1d5db' }}>
-                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Type</th>
-                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Reference</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>PO #</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Supplier</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Method</th>
                   <th style={{ textAlign: 'right', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {poPaymentsData.map((p) => (
                   <tr key={p.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                    <td style={{ padding: '5px 6px', color: '#374151' }}>PO Payment</td>
-                    <td style={{ padding: '5px 6px', color: '#666' }}>{p.reference || '-'}</td>
+                    <td style={{ padding: '5px 6px', color: '#111', fontWeight: 500 }}>{p.purchase_orders?.po_number || '-'}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{p.purchase_orders?.supplier_name || '-'}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{paymentMethodLabels[p.payment_method] || p.payment_method}</td>
                     <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>-{formatCurrency(p.amount)}</td>
                   </tr>
                 ))}
@@ -659,7 +661,8 @@ export function DailyCash() {
               {poPaymentsData.map((p) => (
                 <div key={p.id} className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-zinc-300">PO Payment</span>
+                    {p.purchase_orders?.po_number && <span className="text-sm text-teal-400 font-medium">{p.purchase_orders.po_number}</span>}
+                    <span className="text-sm text-zinc-300">{p.purchase_orders?.supplier_name || 'PO Payment'}</span>
                     <span className="px-2 py-0.5 text-xs rounded-full bg-zinc-800 text-zinc-400">{paymentMethodLabels[p.payment_method]}</span>
                     {p.reference && <span className="text-xs text-zinc-500">Ref: {p.reference}</span>}
                   </div>
