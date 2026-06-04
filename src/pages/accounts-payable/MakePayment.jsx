@@ -17,7 +17,7 @@ export function MakePayment() {
   const [newPayment, setNewPayment] = useState({
     payment_date: new Date().toISOString().split('T')[0],
     amount: '',
-    payment_method: 'bank_transfer',
+    payment_method: 'cash',
     reference: '',
     notes: '',
   })
@@ -116,7 +116,7 @@ export function MakePayment() {
       setNewPayment({
         payment_date: new Date().toISOString().split('T')[0],
         amount: '',
-        payment_method: 'bank_transfer',
+        payment_method: 'cash',
         reference: '',
         notes: '',
       })
