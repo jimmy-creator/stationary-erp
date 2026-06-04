@@ -105,6 +105,7 @@ export function SalesList() {
 
   const formatDate = (date) => new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
   const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+  const formatTotal = (amount) => `QAR ${Math.floor(parseFloat(amount || 0)).toLocaleString('en-US')}`
 
   const statusLabels = {
     completed: { label: 'Completed', class: 'bg-green-900/50 text-green-400' },
@@ -193,14 +194,14 @@ export function SalesList() {
                   <td style={{ padding: '6px', color: sale.status === 'completed' ? '#16a34a' : sale.status === 'returned' ? '#ea580c' : '#dc2626' }}>
                     {statusLabels[sale.status]?.label || sale.status}
                   </td>
-                  <td style={{ padding: '6px', textAlign: 'right', fontWeight: 600, color: '#111' }}>{formatCurrency(sale.grand_total)}</td>
+                  <td style={{ padding: '6px', textAlign: 'right', fontWeight: 600, color: '#111' }}>{formatTotal(sale.grand_total)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr style={{ borderTop: '2px solid #111' }}>
                 <td colSpan={6} style={{ padding: '8px 6px', fontWeight: 700, color: '#111' }}>Total ({sales.length} invoices)</td>
-                <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 700, color: '#111' }}>{formatCurrency(sales.reduce((s, sale) => s + parseFloat(sale.grand_total || 0), 0))}</td>
+                <td style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 700, color: '#111' }}>{formatTotal(sales.reduce((s, sale) => s + parseFloat(sale.grand_total || 0), 0))}</td>
               </tr>
             </tfoot>
           </table>
@@ -337,7 +338,7 @@ export function SalesList() {
                         {statusLabels[sale.status]?.label}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm font-medium text-zinc-200 text-right">{formatCurrency(sale.grand_total)}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-zinc-200 text-right">{formatTotal(sale.grand_total)}</td>
                     <td className="px-6 py-4 text-sm">
                       <Link to={`/sales/${sale.id}`} className="text-teal-400 hover:text-teal-300">View</Link>
                     </td>
@@ -367,7 +368,7 @@ export function SalesList() {
                   <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${paymentStatusLabels[sale.payment_status]?.class}`}>
                     {paymentStatusLabels[sale.payment_status]?.label}
                   </span>
-                  <span className="font-bold text-zinc-200">{formatCurrency(sale.grand_total)}</span>
+                  <span className="font-bold text-zinc-200">{formatTotal(sale.grand_total)}</span>
                 </div>
               </Link>
             ))}

@@ -268,7 +268,7 @@ export function SaleForm() {
   const effectiveDiscountPct = subtotal > 0 ? (discountAmount / subtotal) * 100 : 0
   const afterDiscount = subtotal - discountAmount
   const taxAmount = afterDiscount * (parseFloat(formData.tax_percentage) || 0) / 100
-  const grandTotal = afterDiscount + taxAmount
+  const grandTotal = Math.floor(afterDiscount + taxAmount)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -544,7 +544,7 @@ export function SaleForm() {
               </div>
               <div className="flex justify-between text-lg font-bold border-t border-zinc-700 pt-2">
                 <span className="text-zinc-200">Total:</span>
-                <span className="text-teal-400">QAR {grandTotal.toFixed(2)}</span>
+                <span className="text-teal-400">QAR {grandTotal}</span>
               </div>
             </div>
           </div>
@@ -581,7 +581,7 @@ export function SaleForm() {
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Amount Paid</label>
-              <input type="number" min="0" step="0.01" value={formData.amount_paid} onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })} placeholder={grandTotal.toFixed(2)} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
+              <input type="number" min="0" step="0.01" value={formData.amount_paid} onChange={(e) => setFormData({ ...formData, amount_paid: e.target.value })} placeholder={String(grandTotal)} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50" />
             </div>
           </div>
           <div className="mt-4">

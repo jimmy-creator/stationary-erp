@@ -193,7 +193,7 @@ export function PurchaseOrderForm() {
   const afterDiscount = subtotal - discountAmount
   const taxAmount = afterDiscount * (parseFloat(formData.tax_percentage) || 0) / 100
   const cargoCharges = parseFloat(formData.cargo_charges) || 0
-  const grandTotal = afterDiscount + taxAmount + cargoCharges
+  const grandTotal = Math.floor(afterDiscount + taxAmount + cargoCharges)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -647,7 +647,7 @@ export function PurchaseOrderForm() {
               </div>
               <div className="flex justify-between text-lg font-bold border-t border-zinc-700 pt-2">
                 <span className="text-zinc-200">Total:</span>
-                <span className="text-teal-400">QAR {grandTotal.toFixed(2)}</span>
+                <span className="text-teal-400">QAR {grandTotal}</span>
               </div>
             </div>
           </div>
@@ -675,7 +675,7 @@ export function PurchaseOrderForm() {
                   </div>
                   <div className="bg-zinc-800/40 rounded-lg p-3">
                     <p className="text-xs text-zinc-500">Order Total</p>
-                    <p className="font-medium text-zinc-200">QAR {grandTotal.toFixed(2)}</p>
+                    <p className="font-medium text-zinc-200">QAR {grandTotal}</p>
                   </div>
                   <div className="bg-zinc-800/40 rounded-lg p-3">
                     <p className="text-xs text-zinc-500">Balance Due</p>

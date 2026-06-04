@@ -111,6 +111,7 @@ export function PurchaseOrdersList() {
 
   const formatDate = (date) => date ? new Date(date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
   const formatCurrency = (amount) => `QAR ${parseFloat(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+  const formatTotal = (amount) => `QAR ${Math.floor(parseFloat(amount || 0)).toLocaleString('en-US')}`
 
   const statusLabels = {
     draft: { label: 'Draft', class: 'bg-zinc-800 text-zinc-300' },
@@ -202,7 +203,7 @@ export function PurchaseOrdersList() {
                     <td className="px-6 py-4 text-sm text-zinc-400">{formatDate(order.po_date)}</td>
                     <td className="px-6 py-4 text-sm text-zinc-300">{order.supplier_name}</td>
                     <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${statusLabels[order.status]?.class}`}>{statusLabels[order.status]?.label}</span></td>
-                    <td className="px-6 py-4 text-sm font-medium text-zinc-200 text-right">{formatCurrency(order.grand_total)}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-zinc-200 text-right">{formatTotal(order.grand_total)}</td>
                     <td className="px-6 py-4 text-sm"><Link to={`/purchase-orders/${order.id}`} className="text-teal-400 hover:text-teal-300">View</Link></td>
                   </tr>
                 ))}
@@ -218,7 +219,7 @@ export function PurchaseOrdersList() {
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusLabels[order.status]?.class}`}>{statusLabels[order.status]?.label}</span>
                 </div>
                 <p className="text-zinc-200">{order.supplier_name}</p>
-                <div className="flex justify-end mt-2"><span className="font-bold text-zinc-200">{formatCurrency(order.grand_total)}</span></div>
+                <div className="flex justify-end mt-2"><span className="font-bold text-zinc-200">{formatTotal(order.grand_total)}</span></div>
               </Link>
             ))}
           </div>

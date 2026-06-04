@@ -415,7 +415,7 @@ export function SaleView() {
                     <tr>
                       <td style={{ padding: '8px 8px', textAlign: 'left',  fontWeight: '700', fontSize: '15px', color: DARK, backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderTop: '2px solid #aaaaaa' }}>Total</td>
                       <td style={{ padding: '8px 8px', textAlign: 'right', fontWeight: '700', fontSize: '15px', color: DARK, backgroundImage: 'linear-gradient(#eeeeee, #eeeeee)', borderTop: '2px solid #aaaaaa' }}>
-                        QR {parseFloat(sale.grand_total || 0).toFixed(2)}
+                        QR {Math.floor(parseFloat(sale.grand_total || 0))}
                       </td>
                     </tr>
                     {sale.payment_status !== 'paid' && (
