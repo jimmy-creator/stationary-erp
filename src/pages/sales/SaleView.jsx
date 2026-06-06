@@ -128,6 +128,10 @@ export function SaleView() {
   const balanceDue = (sale.grand_total || 0) - (sale.amount_paid || 0)
   const accent = store.invoice_header_color || DEFAULT_ACCENT
 
+  // Editing is locked 2 days after the sale was created, for everyone (admins included).
+  const EDIT_LOCK_DAYS = 2
+  const editLocked = sale.created_at && Date.now() - new Date(sale.created_at).getTime() > EDIT_LOCK_DAYS * 86400000
+
   return (
     <div className="max-w-4xl mx-auto print-area" style={{ '--invoice-accent': accent }}>
 
@@ -153,8 +157,10 @@ export function SaleView() {
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Link to={`/sales-returns/new?sale_id=${id}`} className="flex-1 sm:flex-none text-center px-4 py-2 text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-md hover:bg-orange-500/20">Create Return</Link>
-          {!isEmployee && <Link to={`/sales/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>}
-          {!isEmployee && <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>}
+          {!isEmployee && (editLocked
+            ? <span className="flex-1 sm:flex-none text-center px-4 py-2 text-zinc-600 bg-zinc-800/40 border border-zinc-800 rounded-md cursor-not-allowed" title={`Editing locked ${EDIT_LOCK_DAYS} days after creation`}>Edit Locked</span>
+            : <Link to={`/sales/${id}/edit`} className="flex-1 sm:flex-none text-center px-4 py-2 text-teal-400 bg-teal-500/10 border border-teal-500/20 rounded-md hover:bg-teal-500/20">Edit</Link>)}
+          {!isEmployee && !editLocked && <button onClick={() => setShowDeleteModal(true)} className="flex-1 sm:flex-none px-4 py-2 text-red-400 bg-red-500/10 border border-red-500/20 rounded-md hover:bg-red-500/20">Delete</button>}
           <button onClick={() => window.print()} className="flex-1 sm:flex-none px-4 py-2 text-zinc-300 bg-zinc-800 border border-zinc-700 rounded-md hover:bg-zinc-700">Print</button>
         </div>
       </div>

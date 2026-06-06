@@ -68,6 +68,14 @@ export function SaleForm() {
       if (saleRes.error) throw saleRes.error
       const sale = saleRes.data
 
+      // Editing is locked 2 days after the sale was created, for everyone.
+      const EDIT_LOCK_DAYS = 2
+      if (sale.created_at && Date.now() - new Date(sale.created_at).getTime() > EDIT_LOCK_DAYS * 86400000) {
+        alert(`This sale can no longer be edited — editing is locked ${EDIT_LOCK_DAYS} days after creation.`)
+        navigate(`/sales/${id}`)
+        return
+      }
+
       setFormData({
         sale_date: sale.sale_date,
         customer_id: sale.customer_id || '',
