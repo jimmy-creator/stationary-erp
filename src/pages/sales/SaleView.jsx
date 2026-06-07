@@ -129,8 +129,11 @@ export function SaleView() {
   const accent = store.invoice_header_color || DEFAULT_ACCENT
 
   // Editing is locked 2 days after the sale was created, for everyone (admins included).
+  // Temporary override: editing is reopened for all sales until the date below, then the lock resumes.
   const EDIT_LOCK_DAYS = 2
-  const editLocked = sale.created_at && Date.now() - new Date(sale.created_at).getTime() > EDIT_LOCK_DAYS * 86400000
+  const EDIT_UNLOCK_UNTIL = new Date('2026-06-08T23:59:59+05:30')
+  const overrideActive = Date.now() < EDIT_UNLOCK_UNTIL.getTime()
+  const editLocked = !overrideActive && sale.created_at && Date.now() - new Date(sale.created_at).getTime() > EDIT_LOCK_DAYS * 86400000
 
   return (
     <div className="max-w-4xl mx-auto print-area" style={{ '--invoice-accent': accent }}>
