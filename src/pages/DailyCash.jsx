@@ -53,7 +53,7 @@ export function DailyCash() {
         // Payment collections for the date(s)
         supabase
           .from('sale_payments')
-          .select('id, sale_id, amount, payment_method, payment_date, reference')
+          .select('id, sale_id, amount, payment_method, payment_date, reference, sales!sale_id(customer_name)')
           .gte('payment_date', from)
           .lte('payment_date', to)
           .order('created_at', { ascending: false })
@@ -313,10 +313,11 @@ export function DailyCash() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '18px' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #16a34a' }}>
-                  <th colSpan={2} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Payment Collections ({realCollections.length})</th>
+                  <th colSpan={3} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Payment Collections ({realCollections.length})</th>
                   <th style={{ textAlign: 'right', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>{formatCurrency(totalCollections)}</th>
                 </tr>
                 <tr style={{ borderBottom: '1px solid #d1d5db' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Customer</th>
                   <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Method</th>
                   <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Reference</th>
                   <th style={{ textAlign: 'right', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Amount</th>
@@ -325,6 +326,7 @@ export function DailyCash() {
               <tbody>
                 {realCollections.map((c) => (
                   <tr key={c.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{c.sales?.customer_name || 'Walk-in'}</td>
                     <td style={{ padding: '5px 6px', color: '#374151' }}>{paymentMethodLabels[c.payment_method] || c.payment_method}</td>
                     <td style={{ padding: '5px 6px', color: '#666' }}>{c.reference || '-'}</td>
                     <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#16a34a' }}>+{formatCurrency(c.amount)}</td>
@@ -593,7 +595,7 @@ export function DailyCash() {
               {realCollections.map((c) => (
                 <div key={c.id} className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-zinc-300">Collection</span>
+                    <span className="text-sm text-zinc-300">{c.sales?.customer_name || 'Collection'}</span>
                     <span className="px-2 py-0.5 text-xs rounded-full bg-zinc-800 text-zinc-400">{paymentMethodLabels[c.payment_method]}</span>
                     {c.reference && <span className="text-xs text-zinc-500">Ref: {c.reference}</span>}
                   </div>
