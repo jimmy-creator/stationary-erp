@@ -1,0 +1,57 @@
+name: Daily database backup (Store 2) → Google Drive
+
+on:
+  schedule:
+    - cron: '30 2 * * *'   # 02:30 UTC daily
+  workflow_dispatch:        # manual trigger from the Actions tab
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Install rclone & PostgreSQL 17 client
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Configure rclone
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+        run: |
+          mkdir -p ~/.config/rclone
+          printf '%s' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          chmod 600 ~/.config/rclone/rclone.conf
+
+      - name: Dump database
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL_STORE2 }}
+        run: |
+          TIMESTAMP=$(date -u +%Y-%m-%d_%H%M%S)
+          BACKUP_FILE="erp-db-${TIMESTAMP}.sql.gz"
+          pg_dump "$DATABASE_URL" --no-owner --no-acl --schema=public \
+            | gzip > "$BACKUP_FILE"
+          SIZE=$(du -sh "$BACKUP_FILE" | cut -f1)
+          echo "BACKUP_FILE=$BACKUP_FILE" >> "$GITHUB_ENV"
+          echo "Backup created: $BACKUP_FILE ($SIZE)"
+
+      - name: Upload to Google Drive
+        run: |
+          rclone copy "$BACKUP_FILE" gdrive1:ERP-Backups-Store2/db-dumps/ --stats-one-line
+
+      - name: Keep only the 30 most recent dumps
+        run: |
+          rclone lsf gdrive1:ERP-Backups-Store2/db-dumps/ --format "tp" --files-only \
+            | sort | head -n -30 \
+            | while IFS=';' read -r ts name; do
+                [ -z "$name" ] && continue
+                echo "Deleting $name (ts=$ts)"
+                rclone delete "gdrive1:ERP-Backups-Store2/db-dumps/$name"
+              done
