@@ -5,7 +5,8 @@ import { useState, useEffect, useRef, useMemo } from 'react'
  * Type to filter by name or phone, arrow keys to navigate, Enter/click to select.
  * Empty value represents "Walk-in Customer".
  */
-export function CustomerSearchSelect({ customers, value, onChange, onConfirm, autoFocus, className, walkInLabel = 'Walk-in Customer', disabled = false }) {
+export function CustomerSearchSelect({ customers, balances, value, onChange, onConfirm, autoFocus, className, walkInLabel = 'Walk-in Customer', disabled = false }) {
+  const formatBalance = (n) => `QAR ${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(0)
@@ -132,7 +133,9 @@ export function CustomerSearchSelect({ customers, value, onChange, onConfirm, au
           {filtered.length === 0 ? (
             <li className="px-3 py-2 text-sm text-zinc-400">No customers found</li>
           ) : (
-            filtered.map((c, i) => (
+            filtered.map((c, i) => {
+              const bal = c._walkIn ? null : balances?.[c.id]
+              return (
               <li
                 key={c.id ?? '__walkin__'}
                 onMouseDown={(e) => {
@@ -149,11 +152,19 @@ export function CustomerSearchSelect({ customers, value, onChange, onConfirm, au
                 }`}
               >
                 <span className="truncate">{c.name}</span>
-                {c.phone && !c._walkIn && (
-                  <span className="text-xs text-zinc-500 shrink-0">{c.phone}</span>
-                )}
+                <span className="flex items-center gap-2 shrink-0">
+                  {c.phone && !c._walkIn && (
+                    <span className="text-xs text-zinc-500">{c.phone}</span>
+                  )}
+                  {bal != null && Math.abs(bal) > 0.01 && (
+                    <span className={`text-xs font-medium ${bal > 0 ? 'text-amber-400' : 'text-green-400'}`}>
+                      {bal > 0 ? formatBalance(bal) : `${formatBalance(bal)} cr`}
+                    </span>
+                  )}
+                </span>
               </li>
-            ))
+              )
+            })
           )}
         </ul>
       )}

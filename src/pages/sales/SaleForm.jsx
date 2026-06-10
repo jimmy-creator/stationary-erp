@@ -15,6 +15,7 @@ export function SaleForm() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [customers, setCustomers] = useState([])
+  const [customerBalances, setCustomerBalances] = useState({}) // { customer_id: outstanding balance }
   const [products, setProducts] = useState([])
   const [salespeople, setSalespeople] = useState([])
 
@@ -47,14 +48,32 @@ export function SaleForm() {
   }, [id])
 
   const fetchData = async () => {
-    const [customersRes, productsRes, salespeopleRes] = await Promise.all([
-      supabase.from('customers').select('id, name, phone').eq('is_active', true).order('name'),
+    const [customersRes, productsRes, salespeopleRes, salesRes, custPayRes] = await Promise.all([
+      supabase.from('customers').select('id, name, phone, opening_balance').eq('is_active', true).order('name'),
       supabase.from('products').select('id, name, selling_price, cost_price, stock_quantity, unit, secondary_unit, unit_conversion').eq('is_active', true).order('name'),
       supabase.from('profiles').select('id, email').order('email'),
+      supabase.from('sales').select('customer_id, grand_total, amount_paid').eq('status', 'completed').not('customer_id', 'is', null),
+      supabase.from('customer_payments').select('customer_id, amount'),
     ])
     setCustomers(customersRes.data || [])
     setProducts(productsRes.data || [])
     setSalespeople(salespeopleRes.data || [])
+
+    // Per-customer outstanding balance, mirroring the customer statement:
+    // sum(completed sale grand_total − amount_paid) + opening_balance − opening payments collected.
+    const balances = {}
+    ;(customersRes.data || []).forEach((c) => {
+      balances[c.id] = parseFloat(c.opening_balance || 0)
+    })
+    ;(salesRes.data || []).forEach((s) => {
+      if (!s.customer_id) return
+      balances[s.customer_id] = (balances[s.customer_id] || 0) + (parseFloat(s.grand_total || 0) - parseFloat(s.amount_paid || 0))
+    })
+    ;(custPayRes.data || []).forEach((p) => {
+      if (!p.customer_id) return
+      balances[p.customer_id] = (balances[p.customer_id] || 0) - parseFloat(p.amount || 0)
+    })
+    setCustomerBalances(balances)
   }
 
   const fetchSale = async () => {
@@ -424,6 +443,7 @@ export function SaleForm() {
               <label className="block text-sm font-medium text-zinc-300 mb-1">Customer</label>
               <CustomerSearchSelect
                 customers={customers}
+                balances={customerBalances}
                 value={formData.customer_id}
                 onChange={handleCustomerChange}
                 className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
