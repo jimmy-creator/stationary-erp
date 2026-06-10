@@ -149,13 +149,13 @@ export function StoreSettings() {
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-zinc-300 mb-1">Logo URL</label>
               <input
-                type="url"
+                type="text"
                 value={formData.logo_url}
                 onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-                placeholder="https://example.com/logo.png"
+                placeholder="/logo-b.svg or https://example.com/logo.png"
                 className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50"
               />
-              <p className="text-xs text-zinc-500 mt-1">Shown on the print header of invoices, returns, receipts and statements.</p>
+              <p className="text-xs text-zinc-500 mt-1">Used as the browser tab icon (favicon) for this store.</p>
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-zinc-300 mb-1">Invoice Header Color</label>
