@@ -240,13 +240,6 @@ export function PurchaseReturnView() {
         printColorAdjust: 'exact',
       }}>
         <div style={{ marginBottom: '10px' }}>
-          {store.logo_url && (
-            <img
-              src={store.logo_url}
-              alt=""
-              style={{ maxHeight: '60px', maxWidth: '220px', marginBottom: '6px', objectFit: 'contain' }}
-            />
-          )}
           <div style={{ fontSize: '22px', fontWeight: '700', letterSpacing: '0.5px', marginBottom: '4px', textTransform: 'uppercase', color: DARK }}>
             {store.store_name || 'BINTHAWAR ERP'}
           </div>
