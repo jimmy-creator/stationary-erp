@@ -12,6 +12,7 @@ export function DailyCash() {
   const [collectionsData, setCollectionsData] = useState([])
   const [openingCollectionsData, setOpeningCollectionsData] = useState([])
   const [poPaymentsData, setPoPaymentsData] = useState([])
+  const [salesReturnsData, setSalesReturnsData] = useState([])
   const [viewMode, setViewMode] = useState('daily') // 'daily' or 'range'
   const [dateRange, setDateRange] = useState({
     from: new Date().toISOString().split('T')[0],
@@ -32,7 +33,7 @@ export function DailyCash() {
       setLoading(true)
       const { from, to } = getDateFilter()
 
-      const [salesRes, expensesRes, collectionsRes, openingCollectionsRes, poPaymentsRes] = await Promise.all([
+      const [salesRes, expensesRes, collectionsRes, openingCollectionsRes, poPaymentsRes, salesReturnsRes] = await Promise.all([
         // Sales for the date(s)
         supabase
           .from('sales')
@@ -79,6 +80,16 @@ export function DailyCash() {
           .order('created_at', { ascending: false })
           .then(res => res)
           .catch(() => ({ data: [], error: null })),
+
+        // Sales returns / refunds for the date(s)
+        supabase
+          .from('sales_returns')
+          .select('id, return_number, customer_name, amount_refunded, refund_method, refund_status, return_date')
+          .gte('return_date', from)
+          .lte('return_date', to)
+          .order('created_at', { ascending: false })
+          .then(res => res)
+          .catch(() => ({ data: [], error: null })),
       ])
 
       setSalesData(salesRes.data || [])
@@ -86,6 +97,7 @@ export function DailyCash() {
       setCollectionsData(collectionsRes.data || [])
       setOpeningCollectionsData(openingCollectionsRes.data || [])
       setPoPaymentsData(poPaymentsRes.data || [])
+      setSalesReturnsData(salesReturnsRes.data || [])
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -153,14 +165,31 @@ export function DailyCash() {
     .filter((p) => p.payment_method !== 'cash')
     .reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
 
+  // Sales returns that actually paid money out — refunded with a real method (cash/card/bank).
+  // Credit-note refunds reduce AR on paper and bring no cash out, so they're excluded.
+  const refundedReturns = salesReturnsData.filter(
+    (r) =>
+      r.refund_status === 'refunded' &&
+      parseFloat(r.amount_refunded || 0) > 0 &&
+      (r.refund_method === 'cash' || r.refund_method === 'card' || r.refund_method === 'bank_transfer')
+  )
+
+  const cashRefunds = refundedReturns
+    .filter((r) => r.refund_method === 'cash')
+    .reduce((sum, r) => sum + parseFloat(r.amount_refunded || 0), 0)
+
+  const bankRefunds = refundedReturns
+    .filter((r) => r.refund_method !== 'cash')
+    .reduce((sum, r) => sum + parseFloat(r.amount_refunded || 0), 0)
+
   // Totals
   const totalCashIn = cashSales + cashCollections + cashOpeningCollections
-  const totalCashOut = cashExpenses + cashPOPayments
+  const totalCashOut = cashExpenses + cashPOPayments + cashRefunds
   const netCash = totalCashIn - totalCashOut
 
   const totalBankIn =
     bankSales + cardSales + bankCollections + cardCollections + bankOpeningCollections + cardOpeningCollections
-  const totalBankOut = bankExpenses + bankPOPayments
+  const totalBankOut = bankExpenses + bankPOPayments + bankRefunds
   const netBank = totalBankIn - totalBankOut
 
   const totalSalesRevenue = salesData.reduce((sum, s) => sum + parseFloat(s.grand_total || 0), 0)
@@ -177,9 +206,10 @@ export function DailyCash() {
   )
   const totalOpeningCollections = realOpeningCollections.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0)
   const totalPOPayments = poPaymentsData.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
+  const totalRefunds = refundedReturns.reduce((sum, r) => sum + parseFloat(r.amount_refunded || 0), 0)
 
   const totalIn = totalSalesReceived + totalCollections + totalOpeningCollections
-  const totalOut = totalExpenses + totalPOPayments
+  const totalOut = totalExpenses + totalPOPayments + totalRefunds
   const netTotal = totalIn - totalOut
 
   const paymentMethodLabels = { cash: 'Cash', card: 'Card', bank_transfer: 'Bank Transfer', credit: 'Credit', credit_card: 'Credit Card', cheque: 'Cheque' }
@@ -256,6 +286,7 @@ export function DailyCash() {
                 {cashOpeningCollections > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Opening Balance Collections</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cashOpeningCollections)}</td></tr>}
                 {cashExpenses > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Expenses</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(cashExpenses)}</td></tr>}
                 {cashPOPayments > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Supplier Payments</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(cashPOPayments)}</td></tr>}
+                {cashRefunds > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Refunds</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(cashRefunds)}</td></tr>}
                 <tr style={{ borderTop: '2px solid #d1d5db' }}><td style={{ padding: '6px', fontWeight: 700, color: '#111' }}>Net Cash</td><td style={{ padding: '6px', textAlign: 'right', fontWeight: 700, color: netCash >= 0 ? '#16a34a' : '#dc2626' }}>{formatCurrency(netCash)}</td></tr>
               </tbody>
             </table>
@@ -272,6 +303,7 @@ export function DailyCash() {
                 {(cardOpeningCollections + bankOpeningCollections) > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Opening Balance Collections</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cardOpeningCollections + bankOpeningCollections)}</td></tr>}
                 {bankExpenses > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Bank Expenses</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(bankExpenses)}</td></tr>}
                 {bankPOPayments > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Bank Supplier Payments</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(bankPOPayments)}</td></tr>}
+                {bankRefunds > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Bank/Card Refunds</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(bankRefunds)}</td></tr>}
                 <tr style={{ borderTop: '2px solid #d1d5db' }}><td style={{ padding: '6px', fontWeight: 700, color: '#111' }}>Net Bank</td><td style={{ padding: '6px', textAlign: 'right', fontWeight: 700, color: netBank >= 0 ? '#16a34a' : '#dc2626' }}>{formatCurrency(netBank)}</td></tr>
               </tbody>
             </table>
@@ -417,6 +449,34 @@ export function DailyCash() {
               </tbody>
             </table>
           )}
+
+          {/* Sales Returns / Refunds */}
+          {refundedReturns.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '18px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #dc2626' }}>
+                  <th colSpan={3} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Sales Returns ({refundedReturns.length})</th>
+                  <th style={{ textAlign: 'right', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>{formatCurrency(totalRefunds)}</th>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #d1d5db' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Return #</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Customer</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Method</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Refunded</th>
+                </tr>
+              </thead>
+              <tbody>
+                {refundedReturns.map((r) => (
+                  <tr key={r.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '5px 6px', color: '#111', fontWeight: 500 }}>{r.return_number}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{r.customer_name || 'Walk-in'}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{paymentMethodLabels[r.refund_method] || r.refund_method}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>-{formatCurrency(r.amount_refunded)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
@@ -522,6 +582,7 @@ export function DailyCash() {
             {cashOpeningCollections > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Opening Balance Collections</span><span className="text-green-400">+{formatCurrency(cashOpeningCollections)}</span></div>}
             {cashExpenses > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Expenses</span><span className="text-red-400">-{formatCurrency(cashExpenses)}</span></div>}
             {cashPOPayments > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Supplier Payments</span><span className="text-red-400">-{formatCurrency(cashPOPayments)}</span></div>}
+            {cashRefunds > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Refunds</span><span className="text-red-400">-{formatCurrency(cashRefunds)}</span></div>}
             <div className={`flex justify-between text-sm font-bold border-t border-zinc-800 pt-2 ${netCash >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               <span>Net Cash</span><span>{formatCurrency(netCash)}</span>
             </div>
@@ -540,6 +601,7 @@ export function DailyCash() {
             {(cardOpeningCollections + bankOpeningCollections) > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Opening Balance Collections</span><span className="text-green-400">+{formatCurrency(cardOpeningCollections + bankOpeningCollections)}</span></div>}
             {bankExpenses > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Bank Expenses</span><span className="text-red-400">-{formatCurrency(bankExpenses)}</span></div>}
             {bankPOPayments > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Bank Supplier Payments</span><span className="text-red-400">-{formatCurrency(bankPOPayments)}</span></div>}
+            {bankRefunds > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Bank/Card Refunds</span><span className="text-red-400">-{formatCurrency(bankRefunds)}</span></div>}
             <div className={`flex justify-between text-sm font-bold border-t border-zinc-800 pt-2 ${netBank >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               <span>Net Bank</span><span>{formatCurrency(netBank)}</span>
             </div>
@@ -675,8 +737,30 @@ export function DailyCash() {
           </div>
         )}
 
+        {/* Sales Returns — refunds that paid money out (cash/card/bank); credit-note refunds excluded */}
+        {refundedReturns.length > 0 && (
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+            <h3 className="text-sm font-medium text-zinc-400 uppercase mb-3">
+              Sales Returns ({refundedReturns.length})
+              <span className="ml-2 text-red-400">{formatCurrency(totalRefunds)}</span>
+            </h3>
+            <div className="space-y-2">
+              {refundedReturns.map((r) => (
+                <div key={r.id} className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-teal-400 font-medium">{r.return_number}</span>
+                    <span className="text-sm text-zinc-300">{r.customer_name || 'Walk-in'}</span>
+                    <span className="px-2 py-0.5 text-xs rounded-full bg-zinc-800 text-zinc-400">{paymentMethodLabels[r.refund_method] || r.refund_method}</span>
+                  </div>
+                  <span className="font-medium text-red-400">-{formatCurrency(r.amount_refunded)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Empty State */}
-        {salesData.length === 0 && expensesData.length === 0 && collectionsData.length === 0 && openingCollectionsData.length === 0 && poPaymentsData.length === 0 && (
+        {salesData.length === 0 && expensesData.length === 0 && collectionsData.length === 0 && openingCollectionsData.length === 0 && poPaymentsData.length === 0 && refundedReturns.length === 0 && (
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
             No transactions for this {viewMode === 'daily' ? 'date' : 'period'}.
           </div>
