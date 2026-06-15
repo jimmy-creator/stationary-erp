@@ -87,17 +87,6 @@ export function SaleForm() {
       if (saleRes.error) throw saleRes.error
       const sale = saleRes.data
 
-      // Editing is locked 2 days after the sale was created, for everyone.
-      // Temporary override: editing is reopened for all sales until the date below, then the lock resumes.
-      const EDIT_LOCK_DAYS = 2
-      const EDIT_UNLOCK_UNTIL = new Date('2026-06-08T23:59:59+05:30')
-      const overrideActive = Date.now() < EDIT_UNLOCK_UNTIL.getTime()
-      if (!overrideActive && sale.created_at && Date.now() - new Date(sale.created_at).getTime() > EDIT_LOCK_DAYS * 86400000) {
-        alert(`This sale can no longer be edited — editing is locked ${EDIT_LOCK_DAYS} days after creation.`)
-        navigate(`/sales/${id}`)
-        return
-      }
-
       setFormData({
         sale_date: sale.sale_date,
         customer_id: sale.customer_id || '',
