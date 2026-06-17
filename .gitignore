@@ -29,6 +29,33 @@ dist-ssr
 .adal
 .augment
 .bob
+# Auto-generated AI agent skill/config dirs (symlink stubs into .agents)
+.codebuddy
+.commandcode
+.continue
+.cortex
+.crush
+.factory
+.goose
+.iflow
+.junie
+.kilocode
+.kiro
+.kode
+.mcpjam
+.mux
+.neovate
+.openhands
+.pi
+.pochi
+.qoder
+.qwen
+.roo
+.trae
+.vibe
+.windsurf
+.zencoder
+/skills
 backups/
 
 # Local Netlify folder
