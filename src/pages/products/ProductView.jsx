@@ -110,7 +110,12 @@ export function ProductView() {
       const appliedPO = (allPosRes.data || []).reduce((sum, r) => sum + (Number(r.applied_quantity) || 0), 0)
       const appliedPurchaseReturns = (allReturnsRes.data || []).reduce((sum, r) => sum + (Number(r.applied_quantity) || 0), 0)
       const appliedSalesReturns = (allSalesReturnsRes.data || []).reduce((sum, r) => sum + (Number(r.applied_quantity) || 0), 0)
-      const manualNet = manualAll.reduce((sum, a) => sum + ((Number(a.new_stock) || 0) - (Number(a.previous_stock) || 0)), 0)
+      // Exclude cancel/reactivate restock rows: their effect is already implied
+      // by soldQty excluding cancelled sales, so counting them here would double
+      // it (and pull opening negative).
+      const manualNet = manualAll
+        .filter((a) => !a.reason || !/^Sale (cancelled|reactivated)\b/i.test(a.reason))
+        .reduce((sum, a) => sum + ((Number(a.new_stock) || 0) - (Number(a.previous_stock) || 0)), 0)
       const current = Number(productRes.data?.stock_quantity) || 0
       const opening = current - appliedPO + soldQty + appliedPurchaseReturns - appliedSalesReturns - manualNet
       setOpeningStock(Math.round(opening * 1000) / 1000)

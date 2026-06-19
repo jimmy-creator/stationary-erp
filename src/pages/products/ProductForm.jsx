@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { Upload, X, Image } from 'lucide-react'
 
 // Convert image to WebP and compress
@@ -36,6 +37,7 @@ async function compressToWebP(file, maxWidth = 800, quality = 0.8) {
 export function ProductForm() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const isEditing = Boolean(id)
   const fileInputRef = useRef(null)
 
@@ -45,6 +47,7 @@ export function ProductForm() {
   const [categories, setCategories] = useState([])
   const [imagePreview, setImagePreview] = useState(null)
   const [imageFile, setImageFile] = useState(null)
+  const [originalStock, setOriginalStock] = useState(null) // stock as loaded, to log manual edits
 
   const [formData, setFormData] = useState({
     name: '',
@@ -99,6 +102,7 @@ export function ProductForm() {
     try {
       const { data, error } = await supabase.from('products').select('*').eq('id', id).single()
       if (error) throw error
+      setOriginalStock(Number(data.stock_quantity) || 0)
       setFormData({
         name: data.name || '',
         description: data.description || '',
@@ -227,6 +231,22 @@ export function ProductForm() {
       if (isEditing) {
         const { error } = await supabase.from('products').update(productData).eq('id', id)
         if (error) throw error
+
+        // Log a directly-edited stock change so it has an audit trail and is
+        // reflected in the opening-stock reconciliation (manualNet). Skipped
+        // when the quantity is unchanged.
+        const newStock = productData.stock_quantity
+        if (originalStock !== null && newStock !== originalStock) {
+          await supabase.from('stock_adjustments').insert({
+            product_id: id,
+            adjustment_type: 'set',
+            quantity: newStock,
+            previous_stock: originalStock,
+            new_stock: newStock,
+            reason: 'Manual stock edit (product form)',
+            created_by_email: user?.email || null,
+          })
+        }
       } else {
         const { data, error } = await supabase.from('products').insert(productData).select().single()
         if (error) throw error

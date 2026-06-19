@@ -39,6 +39,8 @@ export function SaleForm() {
   const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0, entry_unit: 'base' }])
   const [lastPrices, setLastPrices] = useState({}) // { product_id: last_unit_price }
   const [autoFocusIndex, setAutoFocusIndex] = useState(null)
+  const [originalStatus, setOriginalStatus] = useState('completed') // status as loaded, for stock reconciliation on cancel/reactivate
+  const [invoiceNumber, setInvoiceNumber] = useState('') // for the stock_adjustments audit reason
 
   useEffect(() => {
     fetchData().then(() => {
@@ -86,6 +88,8 @@ export function SaleForm() {
 
       if (saleRes.error) throw saleRes.error
       const sale = saleRes.data
+      setOriginalStatus(sale.status || 'completed')
+      setInvoiceNumber(sale.invoice_number || '')
 
       setFormData({
         sale_date: sale.sale_date,
@@ -395,6 +399,33 @@ export function SaleForm() {
                 .update({ stock_quantity: Math.max(0, (Number(product.stock_quantity) || 0) - item.quantity) })
                 .eq('id', item.product_id)
             }
+          }
+        }
+      } else {
+        // Reconcile stock on a status transition: cancelling a sale returns its
+        // units to stock, re-activating a cancelled sale deducts them again.
+        // Each movement writes a stock_adjustments row so the change is audited.
+        // Guarded by originalStatus so a plain edit never double-applies.
+        const wasCancelled = originalStatus === 'cancelled'
+        const nowCancelled = formData.status === 'cancelled'
+        if (wasCancelled !== nowCancelled) {
+          const restocking = nowCancelled // cancel => add back; reactivate => remove
+          for (const item of validItems) {
+            if (!item.product_id) continue
+            const { data: fresh } = await supabase
+              .from('products').select('stock_quantity').eq('id', item.product_id).single()
+            const prev = Number(fresh?.stock_quantity) || 0
+            const next = restocking ? prev + item.quantity : Math.max(0, prev - item.quantity)
+            await supabase.from('products').update({ stock_quantity: next }).eq('id', item.product_id)
+            await supabase.from('stock_adjustments').insert({
+              product_id: item.product_id,
+              adjustment_type: restocking ? 'add' : 'remove',
+              quantity: item.quantity,
+              previous_stock: prev,
+              new_stock: next,
+              reason: `${restocking ? 'Sale cancelled' : 'Sale reactivated'}: ${invoiceNumber}`.trim(),
+              created_by_email: user?.email || null,
+            })
           }
         }
       }
