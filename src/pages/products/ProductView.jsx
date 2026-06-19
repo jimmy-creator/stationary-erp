@@ -41,14 +41,12 @@ export function ProductView() {
           .from('sale_items')
           .select('id, quantity, unit_price, total_price, sale_id, sales(invoice_number, sale_date, customer_name, status)')
           .eq('product_id', id)
-          .order('created_at', { ascending: false })
-          .limit(10),
+          .order('created_at', { ascending: false }),
         supabase
           .from('purchase_order_items')
           .select('id, quantity, unit_price, total_price, po_id, purchase_orders(po_number, po_date, supplier_name, status)')
           .eq('product_id', id)
-          .order('created_at', { ascending: false })
-          .limit(10),
+          .order('created_at', { ascending: false }),
         supabase
           .from('sale_items')
           .select('quantity, sales!inner(status)')
@@ -63,8 +61,7 @@ export function ProductView() {
           .from('purchase_return_items')
           .select('id, quantity, unit_price, total_price, return_id, purchase_returns(return_number, return_date, supplier_name, status)')
           .eq('product_id', id)
-          .order('created_at', { ascending: false })
-          .limit(10),
+          .order('created_at', { ascending: false }),
         supabase
           .from('purchase_return_items')
           .select('quantity, applied_quantity, purchase_returns!inner(status)')
