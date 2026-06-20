@@ -37,7 +37,7 @@ export function ProfitLoss() {
         supabase.from('sales').select('*, sale_items(*)').eq('status', 'completed').order('sale_date', { ascending: false }),
         supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
         supabase.from('products').select('id, name, cost_price'),
-        supabase.from('sales_returns').select('*, sales_return_items(*), sales(status)').eq('status', 'completed').order('return_date', { ascending: false }),
+        supabase.from('sales_returns').select('*, sales_return_items(*)').eq('status', 'completed').order('return_date', { ascending: false }),
       ])
 
       const pMap = {}
@@ -98,11 +98,7 @@ export function ProfitLoss() {
   const { from, to } = getDateRange()
   const periodSales = allSales.filter((s) => s.sale_date >= from && s.sale_date <= to)
   const periodExpenses = allExpenses.filter((e) => e.expense_date >= from && e.expense_date <= to)
-  // Returns whose parent sale was cancelled are excluded: that sale's revenue
-  // was never booked (P&L only counts completed sales), so subtracting its
-  // refund would understate net revenue. Standalone returns (no parent sale)
-  // are kept.
-  const periodReturns = allReturns.filter((r) => r.return_date >= from && r.return_date <= to && r.sales?.status !== 'cancelled')
+  const periodReturns = allReturns.filter((r) => r.return_date >= from && r.return_date <= to)
 
   // ── Statement calculations ──
   const grossRevenue = periodSales.reduce((sum, s) => sum + parseFloat(s.grand_total || 0), 0)
