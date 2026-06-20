@@ -37,7 +37,7 @@ export function ProfitLoss() {
         supabase.from('sales').select('*, sale_items(*)').eq('status', 'completed').order('sale_date', { ascending: false }),
         supabase.from('expenses').select('*').order('expense_date', { ascending: false }),
         supabase.from('products').select('id, name, cost_price'),
-        supabase.from('sales_returns').select('*, sales_return_items(*)').eq('status', 'completed').order('return_date', { ascending: false }),
+        supabase.from('sales_returns').select('*, sales_return_items(*), sales(status)').eq('status', 'completed').order('return_date', { ascending: false }),
       ])
 
       const pMap = {}
@@ -98,7 +98,11 @@ export function ProfitLoss() {
   const { from, to } = getDateRange()
   const periodSales = allSales.filter((s) => s.sale_date >= from && s.sale_date <= to)
   const periodExpenses = allExpenses.filter((e) => e.expense_date >= from && e.expense_date <= to)
-  const periodReturns = allReturns.filter((r) => r.return_date >= from && r.return_date <= to)
+  // Returns whose parent sale was cancelled are excluded: that sale's revenue
+  // was never booked (P&L only counts completed sales), so subtracting its
+  // refund would understate net revenue. Standalone returns (no parent sale)
+  // are kept.
+  const periodReturns = allReturns.filter((r) => r.return_date >= from && r.return_date <= to && r.sales?.status !== 'cancelled')
 
   // ── Statement calculations ──
   const grossRevenue = periodSales.reduce((sum, s) => sum + parseFloat(s.grand_total || 0), 0)
@@ -266,6 +270,7 @@ export function ProfitLoss() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm"><span className="text-zinc-300 pl-4">Sales Revenue ({periodSales.length} invoices)</span><span className="text-zinc-200">{formatCurrency(grossRevenue)}</span></div>
                   {totalDiscount > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400 pl-4">Less: Discounts</span><span className="text-red-400">({formatCurrency(totalDiscount)})</span></div>}
+                  {totalReturns > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400 pl-4">Less: Returns</span><span className="text-red-400">({formatCurrency(totalReturns)})</span></div>}
                 </div>
                 <div className="flex justify-between text-sm font-bold mt-3 pt-2 border-t border-zinc-800/50"><span className="text-white">Net Revenue</span><span className="text-white">{formatCurrency(netRevenue)}</span></div>
               </div>
