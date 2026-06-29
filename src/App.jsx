@@ -45,6 +45,7 @@ import { CollectPayment } from './pages/accounts-receivable/CollectPayment'
 import { CollectOpeningPayment } from './pages/accounts-receivable/CollectOpeningPayment'
 import { PaymentReceipt } from './pages/accounts-receivable/PaymentReceipt'
 import { CustomerPaymentReceipt } from './pages/accounts-receivable/CustomerPaymentReceipt'
+import { Receipts } from './pages/accounts-receivable/Receipts'
 import { AccountsPayable } from './pages/accounts-payable/AccountsPayable'
 import { MakePayment } from './pages/accounts-payable/MakePayment'
 import { VendorPaymentReceipt } from './pages/accounts-payable/VendorPaymentReceipt'
@@ -116,6 +117,7 @@ function App() {
             <Route path="/expenses" element={<ProtectedModule moduleKey="expenses"><ExpensesList /></ProtectedModule>} />
             <Route path="/expenses/new" element={<ProtectedModule moduleKey="expenses"><ExpenseForm /></ProtectedModule>} />
             <Route path="/expenses/:id/edit" element={<ProtectedModule moduleKey="expenses"><ExpenseForm /></ProtectedModule>} />
+            <Route path="/receipts" element={<ProtectedModule moduleKey="accounts-receivable"><Receipts /></ProtectedModule>} />
             <Route path="/accounts-receivable" element={<ProtectedModule moduleKey="accounts-receivable"><AccountsReceivable /></ProtectedModule>} />
             <Route path="/accounts-receivable/opening/:customerId/collect" element={<ProtectedModule moduleKey="accounts-receivable"><CollectOpeningPayment /></ProtectedModule>} />
             <Route path="/accounts-receivable/:id/collect" element={<ProtectedModule moduleKey="accounts-receivable"><CollectPayment /></ProtectedModule>} />

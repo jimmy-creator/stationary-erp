@@ -14,6 +14,7 @@ import {
   ShoppingBag,
   Undo2,
   Receipt,
+  ReceiptText,
   Users,
   Wallet,
   CreditCard,
@@ -71,6 +72,7 @@ export function Layout() {
       items: [
         { to: '/expenses', label: 'Expenses', icon: Receipt, moduleKey: 'expenses' },
         { to: '/accounts-receivable', label: 'Receivables', icon: Wallet, moduleKey: 'accounts-receivable' },
+        { to: '/receipts', label: 'Receipts', icon: ReceiptText, moduleKey: 'accounts-receivable' },
         { to: '/accounts-payable', label: 'Payables', icon: CreditCard, moduleKey: 'accounts-payable' },
         { to: '/daily-cash', label: 'Daily Cash', icon: Calculator, moduleKey: 'daily-cash' },
         { to: '/cash-accounts', label: 'Cash Accounts', icon: Banknote, moduleKey: 'cash-accounts' },
