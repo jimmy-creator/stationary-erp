@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Trash2, Printer, Pencil } from 'lucide-react'
@@ -7,6 +7,7 @@ import { Trash2, Printer, Pencil } from 'lucide-react'
 export function CollectPayment() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { isEmployee, user } = useAuth()
 
   const [sale, setSale] = useState(null)
@@ -46,6 +47,13 @@ export function CollectPayment() {
       if (saleRes.error) throw saleRes.error
       setSale(saleRes.data)
       setPayments(paymentsRes.data || [])
+
+      // Auto-open the edit form when arriving from a receipt's "Edit" button (?edit=<paymentId>)
+      const editId = searchParams.get('edit')
+      if (editId && !isEmployee) {
+        const target = (paymentsRes.data || []).find((p) => p.id === editId)
+        if (target && isEditablePayment(target)) handleStartEdit(target)
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
       // If sale_payments doesn't exist, just load the sale
@@ -409,7 +417,15 @@ export function CollectPayment() {
               <span className="ml-3 text-sm text-zinc-300">Initial payment at sale</span>
               <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-zinc-800 text-zinc-400">{sale.payment_method}</span>
             </div>
-            <span className="font-medium text-green-400">{formatCurrency(initialPayment)}</span>
+            <div className="flex items-center gap-3 ml-4">
+              <span className="font-medium text-green-400">{formatCurrency(initialPayment)}</span>
+              {/* Initial payment lives on the invoice itself (no sale_payments row), so edit it on the invoice */}
+              {!isEmployee && (
+                <Link to={`/sales/${id}/edit`} title="Edit on invoice" className="text-zinc-400 hover:text-teal-400">
+                  <Pencil className="w-4 h-4" />
+                </Link>
+              )}
+            </div>
           </div>
         )}
 

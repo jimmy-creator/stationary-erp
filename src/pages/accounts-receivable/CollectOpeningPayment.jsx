@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Trash2, Pencil, Printer } from 'lucide-react'
@@ -7,6 +7,7 @@ import { Trash2, Pencil, Printer } from 'lucide-react'
 export function CollectOpeningPayment() {
   const { customerId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { isEmployee, user } = useAuth()
 
   const [customer, setCustomer] = useState(null)
@@ -45,6 +46,13 @@ export function CollectOpeningPayment() {
       if (customerRes.error) throw customerRes.error
       setCustomer(customerRes.data)
       setPayments(paymentsRes.data || [])
+
+      // Auto-open the edit form when arriving from a receipt's "Edit" button (?edit=<paymentId>)
+      const editId = searchParams.get('edit')
+      if (editId && !isEmployee) {
+        const target = (paymentsRes.data || []).find((p) => p.id === editId)
+        if (target) handleStartEdit(target)
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {

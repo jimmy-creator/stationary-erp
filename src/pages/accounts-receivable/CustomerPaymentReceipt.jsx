@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useStoreSettings } from '../../hooks/useStoreSettings'
-import { Printer } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
+import { Printer, Pencil } from 'lucide-react'
 
 const fmtScreen = (n) => `QAR ${parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'
@@ -45,6 +46,7 @@ function numberToWords(amount) {
 export function CustomerPaymentReceipt() {
   const { id } = useParams()
   const { settings: store } = useStoreSettings()
+  const { isEmployee } = useAuth()
   const [payment, setPayment] = useState(null)
   const [customer, setCustomer] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -83,6 +85,7 @@ export function CustomerPaymentReceipt() {
   const isAdjustment = payment.payment_method === 'discount'
   const docNumber = payment.receipt_number || (isAdjustment ? `Adjustment ${payment.id.substring(0, 8)}` : `Payment ${payment.id.substring(0, 8)}`)
   const accent = store.invoice_header_color || DEFAULT_ACCENT
+  const canEdit = !isEmployee && customer
 
   return (
     <div className="max-w-3xl mx-auto print-area" style={{ '--invoice-accent': accent }}>
@@ -92,6 +95,11 @@ export function CustomerPaymentReceipt() {
           <h1 className="text-xl lg:text-2xl font-bold text-white">{docNumber}</h1>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {canEdit && (
+            <Link to={`/accounts-receivable/opening/${customer.id}/collect?edit=${payment.id}`} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-md hover:bg-zinc-700">
+              <Pencil className="w-4 h-4" /> Edit
+            </Link>
+          )}
           <button onClick={() => window.print()} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-500 text-white rounded-md hover:from-teal-500 hover:to-teal-400">
             <Printer className="w-4 h-4" /> Print
           </button>

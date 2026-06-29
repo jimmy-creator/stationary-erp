@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Trash2, Printer, Pencil } from 'lucide-react'
@@ -7,6 +7,7 @@ import { Trash2, Printer, Pencil } from 'lucide-react'
 export function MakePayment() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { isEmployee } = useAuth()
 
   const [order, setOrder] = useState(null)
@@ -45,6 +46,13 @@ export function MakePayment() {
       if (orderRes.error) throw orderRes.error
       setOrder(orderRes.data)
       setPayments(paymentsRes.data || [])
+
+      // Auto-open the edit form when arriving from a receipt's "Edit" button (?edit=<paymentId>)
+      const editId = searchParams.get('edit')
+      if (editId && !isEmployee) {
+        const target = (paymentsRes.data || []).find((p) => p.id === editId)
+        if (target && isEditablePayment(target)) handleStartEdit(target)
+      }
     } catch (error) {
       console.error('Error:', error)
       try {
@@ -327,7 +335,15 @@ export function MakePayment() {
               <span className="text-sm text-zinc-400">{formatDate(order.po_date)}</span>
               <span className="ml-3 text-sm text-zinc-300">Initial payment</span>
             </div>
-            <span className="font-medium text-green-400">{formatCurrency(initialPayment)}</span>
+            <div className="flex items-center gap-3 ml-4">
+              <span className="font-medium text-green-400">{formatCurrency(initialPayment)}</span>
+              {/* Initial payment lives on the PO itself (no po_payments row), so edit it on the PO */}
+              {!isEmployee && (
+                <Link to={`/purchase-orders/${id}/edit`} title="Edit on purchase order" className="text-zinc-400 hover:text-teal-400">
+                  <Pencil className="w-4 h-4" />
+                </Link>
+              )}
+            </div>
           </div>
         )}
 

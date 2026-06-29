@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Trash2, Pencil, Printer } from 'lucide-react'
@@ -7,6 +7,7 @@ import { Trash2, Pencil, Printer } from 'lucide-react'
 export function CollectStaffPayment() {
   const { employeeId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { isEmployee, user } = useAuth()
 
   const [employee, setEmployee] = useState(null)
@@ -46,6 +47,13 @@ export function CollectStaffPayment() {
       if (empRes.error) throw empRes.error
       setEmployee(empRes.data)
       setPayments(paymentsRes.data || [])
+
+      // Auto-open the edit form when arriving from a receipt's "Edit" button (?edit=<paymentId>)
+      const editId = searchParams.get('edit')
+      if (editId && !isEmployee) {
+        const target = (paymentsRes.data || []).find((p) => p.id === editId)
+        if (target) handleStartEdit(target)
+      }
 
       // Cash custody — receipts this employee's login has issued.
       if (empRes.data?.auth_user_id) {
