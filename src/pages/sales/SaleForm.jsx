@@ -39,7 +39,6 @@ export function SaleForm() {
   const [items, setItems] = useState([{ product_id: '', product_name: '', quantity: 1, unit_price: 0, total_price: 0, entry_unit: 'base' }])
   const [lastPrices, setLastPrices] = useState({}) // { product_id: last_unit_price }
   const [autoFocusIndex, setAutoFocusIndex] = useState(null)
-  const [originalStatus, setOriginalStatus] = useState('completed') // status as loaded, for stock reconciliation on cancel/reactivate
   const [invoiceNumber, setInvoiceNumber] = useState('') // for the stock_adjustments audit reason
 
   useEffect(() => {
@@ -88,7 +87,6 @@ export function SaleForm() {
 
       if (saleRes.error) throw saleRes.error
       const sale = saleRes.data
-      setOriginalStatus(sale.status || 'completed')
       setInvoiceNumber(sale.invoice_number || '')
 
       setFormData({
@@ -363,11 +361,21 @@ export function SaleForm() {
 
       let saleId = id
 
+      // What each product currently has deducted from stock via this sale, so
+      // an edit can reconcile by delta instead of re-applying from scratch.
+      const oldApplied = {}
+
       if (isEditing) {
         const { error } = await supabase.from('sales').update(saleData).eq('id', id)
         if (error) throw error
 
-        // Delete old items and re-insert
+        // Snapshot the old lines' applied stock, then delete and re-insert.
+        const { data: oldItems } = await supabase
+          .from('sale_items').select('product_id, applied_quantity').eq('sale_id', id)
+        for (const oi of oldItems || []) {
+          if (!oi.product_id) continue
+          oldApplied[oi.product_id] = (oldApplied[oi.product_id] || 0) + (Number(oi.applied_quantity) || 0)
+        }
         await supabase.from('sale_items').delete().eq('sale_id', id)
       } else {
         const { data, error } = await supabase.from('sales').insert(saleData).select().single()
@@ -375,7 +383,11 @@ export function SaleForm() {
         saleId = data.id
       }
 
-      // Insert items
+      // A cancelled sale applies nothing to stock; any other status applies the
+      // full line quantity. This snapshot drives the delta reconciliation below.
+      const appliedFor = (item) => (formData.status === 'cancelled' ? 0 : Number(item.quantity) || 0)
+
+      // Insert items (with the per-line applied snapshot)
       const itemsData = validItems.map((item) => ({
         sale_id: saleId,
         product_id: item.product_id || null,
@@ -383,51 +395,42 @@ export function SaleForm() {
         quantity: item.quantity,
         unit_price: item.unit_price,
         total_price: item.total_price,
+        applied_quantity: appliedFor(item),
       }))
 
       const { error: itemsError } = await supabase.from('sale_items').insert(itemsData)
       if (itemsError) throw itemsError
 
-      // Update stock quantities (deduct for new sales)
-      if (!isEditing) {
-        for (const item of validItems) {
-          if (item.product_id) {
-            const product = products.find((p) => p.id === item.product_id)
-            if (product) {
-              await supabase
-                .from('products')
-                .update({ stock_quantity: Math.max(0, (Number(product.stock_quantity) || 0) - item.quantity) })
-                .eq('id', item.product_id)
-            }
-          }
-        }
-      } else {
-        // Reconcile stock on a status transition: cancelling a sale returns its
-        // units to stock, re-activating a cancelled sale deducts them again.
-        // Each movement writes a stock_adjustments row so the change is audited.
-        // Guarded by originalStatus so a plain edit never double-applies.
-        const wasCancelled = originalStatus === 'cancelled'
-        const nowCancelled = formData.status === 'cancelled'
-        if (wasCancelled !== nowCancelled) {
-          const restocking = nowCancelled // cancel => add back; reactivate => remove
-          for (const item of validItems) {
-            if (!item.product_id) continue
-            const { data: fresh } = await supabase
-              .from('products').select('stock_quantity').eq('id', item.product_id).single()
-            const prev = Number(fresh?.stock_quantity) || 0
-            const next = restocking ? prev + item.quantity : Math.max(0, prev - item.quantity)
-            await supabase.from('products').update({ stock_quantity: next }).eq('id', item.product_id)
-            await supabase.from('stock_adjustments').insert({
-              product_id: item.product_id,
-              adjustment_type: restocking ? 'add' : 'remove',
-              quantity: item.quantity,
-              previous_stock: prev,
-              new_stock: next,
-              reason: `${restocking ? 'Sale cancelled' : 'Sale reactivated'}: ${invoiceNumber}`.trim(),
-              created_by_email: user?.email || null,
-            })
-          }
-        }
+      // Reconcile stock by delta against what each product previously had
+      // applied through this sale. One path covers create (oldApplied empty),
+      // line add/remove/qty-change on edit, and cancel/reactivate (the new
+      // applied snapshot collapses to 0 or back to the full quantity).
+      const newApplied = {}
+      for (const item of validItems) {
+        if (!item.product_id) continue
+        newApplied[item.product_id] = (newApplied[item.product_id] || 0) + appliedFor(item)
+      }
+      const affectedIds = new Set([...Object.keys(oldApplied), ...Object.keys(newApplied)])
+      for (const pid of affectedIds) {
+        const delta = (newApplied[pid] || 0) - (oldApplied[pid] || 0) // >0 deduct, <0 restock
+        if (delta === 0) continue
+        const { data: fresh } = await supabase
+          .from('products').select('stock_quantity').eq('id', pid).single()
+        const prev = Number(fresh?.stock_quantity) || 0
+        const next = Math.max(0, prev - delta)
+        const { error: stockErr } = await supabase
+          .from('products').update({ stock_quantity: next }).eq('id', pid)
+        if (stockErr) throw stockErr
+        // Audit row (best-effort — no-op until migration 015 is applied).
+        await supabase.from('stock_adjustments').insert({
+          product_id: pid,
+          adjustment_type: delta > 0 ? 'remove' : 'add',
+          quantity: Math.abs(delta),
+          previous_stock: prev,
+          new_stock: next,
+          reason: `Sale ${isEditing ? 'edited' : 'created'}: ${invoiceNumber}`.trim(),
+          created_by_email: user?.email || null,
+        })
       }
 
       navigate(`/sales/${saleId}`)
