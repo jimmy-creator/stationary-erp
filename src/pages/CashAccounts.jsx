@@ -20,6 +20,8 @@ export function CashAccounts() {
   const [capitalIn, setCapitalIn] = useState([])
   const [capitalOut, setCapitalOut] = useState([])
   const [fixedAssets, setFixedAssets] = useState([])
+  const [purchaseReturnRefunds, setPurchaseReturnRefunds] = useState([]) // cash refunds FROM suppliers (in)
+  const [salesReturnRefunds, setSalesReturnRefunds] = useState([])       // cash refunds TO customers (out)
 
   useEffect(() => { fetchData() }, [period, selectedMonth, dateRange.from, dateRange.to])
 
@@ -85,6 +87,31 @@ export function CashAccounts() {
         .order('purchase_date', { ascending: false })
         .then((r) => r).catch(() => ({ data: [], error: null }))
       setFixedAssets(faRes.data || [])
+
+      // Cash refunds on returns — a purchase return refunded in cash brings money
+      // IN (supplier pays us back); a sales return refunded in cash pays money OUT.
+      // Only status='refunded' rows moved actual cash.
+      const prRes = await supabase
+        .from('purchase_returns')
+        .select('id, return_number, return_date, supplier_name, amount_refunded')
+        .eq('refund_method', 'cash')
+        .eq('refund_status', 'refunded')
+        .gte('return_date', from)
+        .lte('return_date', to)
+        .order('return_date', { ascending: false })
+      if (prRes.error) console.error('Cash purchase-return refunds error:', prRes.error)
+      setPurchaseReturnRefunds(prRes.data || [])
+
+      const srRes = await supabase
+        .from('sales_returns')
+        .select('id, return_number, return_date, customer_name, amount_refunded')
+        .eq('refund_method', 'cash')
+        .eq('refund_status', 'refunded')
+        .gte('return_date', from)
+        .lte('return_date', to)
+        .order('return_date', { ascending: false })
+      if (srRes.error) console.error('Cash sales-return refunds error:', srRes.error)
+      setSalesReturnRefunds(srRes.data || [])
     } catch (err) {
       console.error('fetchData error:', err)
     } finally {
@@ -106,6 +133,8 @@ export function CashAccounts() {
   const totalCapitalIn = capitalIn.reduce((s, x) => s + parseFloat(x.amount || 0), 0)
   const totalCapitalOut = capitalOut.reduce((s, x) => s + parseFloat(x.amount || 0), 0)
   const totalFixedAssets = fixedAssets.reduce((s, x) => s + parseFloat(x.cost || 0), 0)
+  const totalPurchaseReturnRefunds = purchaseReturnRefunds.reduce((s, x) => s + parseFloat(x.amount_refunded || 0), 0)
+  const totalSalesReturnRefunds = salesReturnRefunds.reduce((s, x) => s + parseFloat(x.amount_refunded || 0), 0)
 
   // Monthly breakdown for sales
   const salesByMonth = cashSales.reduce((acc, s) => {
@@ -122,9 +151,9 @@ export function CashAccounts() {
   // ── Purchase stats
   const totalCashPurchases = cashPurchases.reduce((s, x) => s + parseFloat(x.amount || 0), 0)
 
-  // Composite totals folding in capital and fixed-asset cash flow
-  const totalCashIn = totalCashSales + totalCapitalIn
-  const totalCashOut = totalCashPurchases + totalCapitalOut + totalFixedAssets
+  // Composite totals folding in capital, fixed-asset and return-refund cash flow
+  const totalCashIn = totalCashSales + totalCapitalIn + totalPurchaseReturnRefunds
+  const totalCashOut = totalCashPurchases + totalCapitalOut + totalFixedAssets + totalSalesReturnRefunds
   const netCash = totalCashIn - totalCashOut
 
   // Monthly breakdown for purchases
@@ -194,7 +223,13 @@ export function CashAccounts() {
             <div>
               <p className="text-xs text-zinc-500">Total Cash In</p>
               <p className="text-lg font-bold text-green-400">{fmt(totalCashIn)}</p>
-              {totalCapitalIn > 0 && <p className="text-[10px] text-zinc-500 mt-0.5">incl. capital {fmt(totalCapitalIn)}</p>}
+              {(totalCapitalIn > 0 || totalPurchaseReturnRefunds > 0) && (
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  {totalCapitalIn > 0 && `incl. capital ${fmt(totalCapitalIn)}`}
+                  {totalCapitalIn > 0 && totalPurchaseReturnRefunds > 0 && ', '}
+                  {totalPurchaseReturnRefunds > 0 && `refunds ${fmt(totalPurchaseReturnRefunds)}`}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -234,14 +269,22 @@ export function CashAccounts() {
         </div>
       </div>
 
-      {/* Capital & Fixed Asset breakdown — only shown when there's activity */}
-      {(totalCapitalIn > 0 || totalCapitalOut > 0 || totalFixedAssets > 0) && (
+      {/* Capital, returns & fixed-asset breakdown — only shown when there's activity */}
+      {(totalCapitalIn > 0 || totalCapitalOut > 0 || totalFixedAssets > 0 || totalPurchaseReturnRefunds > 0 || totalSalesReturnRefunds > 0) && (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 mb-6">
-          <h2 className="text-sm font-medium text-zinc-400 uppercase mb-3">Capital & Fixed Assets ({periodLabel})</h2>
+          <h2 className="text-sm font-medium text-zinc-400 uppercase mb-3">Capital, Returns & Fixed Assets ({periodLabel})</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div className="flex justify-between">
               <span className="text-zinc-400">Capital Injections</span>
               <span className="text-green-400 font-medium">+{fmt(totalCapitalIn)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Purchase Return Refunds</span>
+              <span className="text-green-400 font-medium">+{fmt(totalPurchaseReturnRefunds)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-400">Sales Return Refunds</span>
+              <span className="text-red-400 font-medium">-{fmt(totalSalesReturnRefunds)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-zinc-400">Owner Withdrawals</span>

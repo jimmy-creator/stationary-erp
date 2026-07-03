@@ -13,6 +13,7 @@ export function DailyCash() {
   const [openingCollectionsData, setOpeningCollectionsData] = useState([])
   const [poPaymentsData, setPoPaymentsData] = useState([])
   const [salesReturnsData, setSalesReturnsData] = useState([])
+  const [purchaseReturnsData, setPurchaseReturnsData] = useState([])
   const [viewMode, setViewMode] = useState('daily') // 'daily' or 'range'
   const [dateRange, setDateRange] = useState({
     from: new Date().toISOString().split('T')[0],
@@ -33,7 +34,7 @@ export function DailyCash() {
       setLoading(true)
       const { from, to } = getDateFilter()
 
-      const [salesRes, expensesRes, collectionsRes, openingCollectionsRes, poPaymentsRes, salesReturnsRes] = await Promise.all([
+      const [salesRes, expensesRes, collectionsRes, openingCollectionsRes, poPaymentsRes, salesReturnsRes, purchaseReturnsRes] = await Promise.all([
         // Sales for the date(s)
         supabase
           .from('sales')
@@ -90,6 +91,16 @@ export function DailyCash() {
           .order('created_at', { ascending: false })
           .then(res => res)
           .catch(() => ({ data: [], error: null })),
+
+        // Purchase returns / refunds for the date(s) — cash refund from a supplier is money IN
+        supabase
+          .from('purchase_returns')
+          .select('id, return_number, supplier_name, amount_refunded, refund_method, refund_status, return_date')
+          .gte('return_date', from)
+          .lte('return_date', to)
+          .order('created_at', { ascending: false })
+          .then(res => res)
+          .catch(() => ({ data: [], error: null })),
       ])
 
       setSalesData(salesRes.data || [])
@@ -98,6 +109,7 @@ export function DailyCash() {
       setOpeningCollectionsData(openingCollectionsRes.data || [])
       setPoPaymentsData(poPaymentsRes.data || [])
       setSalesReturnsData(salesReturnsRes.data || [])
+      setPurchaseReturnsData(purchaseReturnsRes.data || [])
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -182,13 +194,28 @@ export function DailyCash() {
     .filter((r) => r.refund_method !== 'cash')
     .reduce((sum, r) => sum + parseFloat(r.amount_refunded || 0), 0)
 
+  // Purchase returns refunded with a real method bring money IN (supplier pays us back).
+  const refundedPurchaseReturns = purchaseReturnsData.filter(
+    (r) =>
+      r.refund_status === 'refunded' &&
+      parseFloat(r.amount_refunded || 0) > 0 &&
+      (r.refund_method === 'cash' || r.refund_method === 'card' || r.refund_method === 'bank_transfer')
+  )
+  const cashPurchaseRefunds = refundedPurchaseReturns
+    .filter((r) => r.refund_method === 'cash')
+    .reduce((sum, r) => sum + parseFloat(r.amount_refunded || 0), 0)
+  const bankPurchaseRefunds = refundedPurchaseReturns
+    .filter((r) => r.refund_method !== 'cash')
+    .reduce((sum, r) => sum + parseFloat(r.amount_refunded || 0), 0)
+  const totalPurchaseRefunds = refundedPurchaseReturns.reduce((sum, r) => sum + parseFloat(r.amount_refunded || 0), 0)
+
   // Totals
-  const totalCashIn = cashSales + cashCollections + cashOpeningCollections
+  const totalCashIn = cashSales + cashCollections + cashOpeningCollections + cashPurchaseRefunds
   const totalCashOut = cashExpenses + cashPOPayments + cashRefunds
   const netCash = totalCashIn - totalCashOut
 
   const totalBankIn =
-    bankSales + cardSales + bankCollections + cardCollections + bankOpeningCollections + cardOpeningCollections
+    bankSales + cardSales + bankCollections + cardCollections + bankOpeningCollections + cardOpeningCollections + bankPurchaseRefunds
   const totalBankOut = bankExpenses + bankPOPayments + bankRefunds
   const netBank = totalBankIn - totalBankOut
 
@@ -208,7 +235,7 @@ export function DailyCash() {
   const totalPOPayments = poPaymentsData.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0)
   const totalRefunds = refundedReturns.reduce((sum, r) => sum + parseFloat(r.amount_refunded || 0), 0)
 
-  const totalIn = totalSalesReceived + totalCollections + totalOpeningCollections
+  const totalIn = totalSalesReceived + totalCollections + totalOpeningCollections + totalPurchaseRefunds
   const totalOut = totalExpenses + totalPOPayments + totalRefunds
   const netTotal = totalIn - totalOut
 
@@ -472,6 +499,34 @@ export function DailyCash() {
                     <td style={{ padding: '5px 6px', color: '#374151' }}>{r.customer_name || 'Walk-in'}</td>
                     <td style={{ padding: '5px 6px', color: '#374151' }}>{paymentMethodLabels[r.refund_method] || r.refund_method}</td>
                     <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>-{formatCurrency(r.amount_refunded)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* Purchase Returns / Refunds — money in from suppliers */}
+          {refundedPurchaseReturns.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9pt', marginBottom: '18px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #16a34a' }}>
+                  <th colSpan={3} style={{ textAlign: 'left', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>Purchase Returns ({refundedPurchaseReturns.length})</th>
+                  <th style={{ textAlign: 'right', padding: '6px', color: '#111', fontWeight: 700, fontSize: '11pt' }}>{formatCurrency(totalPurchaseRefunds)}</th>
+                </tr>
+                <tr style={{ borderBottom: '1px solid #d1d5db' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Return #</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Supplier</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Method</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px', color: '#666', fontWeight: 600, textTransform: 'uppercase', fontSize: '8pt' }}>Refunded</th>
+                </tr>
+              </thead>
+              <tbody>
+                {refundedPurchaseReturns.map((r) => (
+                  <tr key={r.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '5px 6px', color: '#111', fontWeight: 500 }}>{r.return_number}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{r.supplier_name || '—'}</td>
+                    <td style={{ padding: '5px 6px', color: '#374151' }}>{paymentMethodLabels[r.refund_method] || r.refund_method}</td>
+                    <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 600, color: '#16a34a' }}>+{formatCurrency(r.amount_refunded)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -759,8 +814,30 @@ export function DailyCash() {
           </div>
         )}
 
+        {/* Purchase Returns — refunds from suppliers that brought money in (cash/card/bank); debit-note refunds excluded */}
+        {refundedPurchaseReturns.length > 0 && (
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+            <h3 className="text-sm font-medium text-zinc-400 uppercase mb-3">
+              Purchase Returns ({refundedPurchaseReturns.length})
+              <span className="ml-2 text-green-400">{formatCurrency(totalPurchaseRefunds)}</span>
+            </h3>
+            <div className="space-y-2">
+              {refundedPurchaseReturns.map((r) => (
+                <div key={r.id} className="flex items-center justify-between bg-zinc-800/30 rounded-lg p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-teal-400 font-medium">{r.return_number}</span>
+                    <span className="text-sm text-zinc-300">{r.supplier_name || '—'}</span>
+                    <span className="px-2 py-0.5 text-xs rounded-full bg-zinc-800 text-zinc-400">{paymentMethodLabels[r.refund_method] || r.refund_method}</span>
+                  </div>
+                  <span className="font-medium text-green-400">+{formatCurrency(r.amount_refunded)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Empty State */}
-        {salesData.length === 0 && expensesData.length === 0 && collectionsData.length === 0 && openingCollectionsData.length === 0 && poPaymentsData.length === 0 && refundedReturns.length === 0 && (
+        {salesData.length === 0 && expensesData.length === 0 && collectionsData.length === 0 && openingCollectionsData.length === 0 && poPaymentsData.length === 0 && refundedReturns.length === 0 && refundedPurchaseReturns.length === 0 && (
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 text-center text-zinc-500">
             No transactions for this {viewMode === 'daily' ? 'date' : 'period'}.
           </div>
