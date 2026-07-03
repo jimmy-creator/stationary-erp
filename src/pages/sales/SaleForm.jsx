@@ -505,8 +505,8 @@ export function SaleForm() {
         <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-4 lg:p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-medium text-white">Items</h2>
-            {/* Header button — phones (<sm) and desktop (lg+); on tablets it moves beside the Total */}
-            <button type="button" onClick={addItem} className="flex sm:hidden lg:flex items-center gap-1 text-sm text-teal-400 hover:text-teal-300" title="Add Item (Ctrl+I)">
+            {/* Header button — phones (<sm) and desktop (xl+); on tablets it moves beside the Total */}
+            <button type="button" onClick={addItem} className="flex sm:hidden xl:flex items-center gap-1 text-sm text-teal-400 hover:text-teal-300" title="Add Item (Ctrl+I)">
               <Plus className="w-4 h-4" /> Add Item <span className="text-xs text-zinc-600 ml-1 hidden sm:inline">(Ctrl+I)</span>
             </button>
           </div>
@@ -580,8 +580,8 @@ export function SaleForm() {
 
           {/* Totals */}
           <div className="mt-4 flex items-start gap-4">
-            {/* Add Item — parallel to the Total on tablet-sized screens (sm to lg) */}
-            <button type="button" onClick={addItem} className="hidden sm:flex lg:hidden items-center gap-1 text-sm text-teal-400 hover:text-teal-300" title="Add Item (Ctrl+I)">
+            {/* Add Item — parallel to the Total on tablet-sized screens (sm to xl) */}
+            <button type="button" onClick={addItem} className="hidden sm:flex xl:hidden items-center gap-1 text-sm text-teal-400 hover:text-teal-300" title="Add Item (Ctrl+I)">
               <Plus className="w-4 h-4" /> Add Item
             </button>
             <div className="w-72 space-y-2 ml-auto">
