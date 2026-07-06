@@ -483,11 +483,14 @@ export function PurchaseReturnForm() {
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-300 mb-1">Supplier *</label>
-              <select required value={formData.supplier_id} onChange={(e) => {
-                const s = suppliers.find((x) => x.id === e.target.value)
-                setFormData({ ...formData, supplier_id: e.target.value, supplier_name: s?.name || '' })
+              <select required value={formData.supplier_id || (formData.supplier_name === 'Walk-in Supplier' ? '__walkin__' : '')} onChange={(e) => {
+                const v = e.target.value
+                if (v === '__walkin__') { setFormData({ ...formData, supplier_id: '', supplier_name: 'Walk-in Supplier' }); return }
+                const s = suppliers.find((x) => x.id === v)
+                setFormData({ ...formData, supplier_id: v, supplier_name: s?.name || '' })
               }} disabled={Boolean(formData.po_id)} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50 disabled:opacity-60">
                 <option value="">— Select supplier —</option>
+                <option value="__walkin__">Walk-in Supplier</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
               {formData.po_id && formData.supplier_name && (

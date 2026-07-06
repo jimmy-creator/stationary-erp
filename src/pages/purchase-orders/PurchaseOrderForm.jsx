@@ -106,6 +106,10 @@ export function PurchaseOrderForm() {
   }
 
   const handleSupplierChange = (supplierId) => {
+    if (supplierId === '__walkin__') {
+      setFormData({ ...formData, supplier_id: '', supplier_name: 'Walk-in Supplier', supplier_phone: '', supplier_email: '' })
+      return
+    }
     const supplier = suppliers.find((s) => s.id === supplierId)
     setFormData({
       ...formData,
@@ -558,8 +562,9 @@ export function PurchaseOrderForm() {
             </div>
             <div className="md:col-span-3">
               <label className="block text-sm font-medium text-zinc-300 mb-1">Supplier *</label>
-              <select required value={formData.supplier_id} onChange={(e) => handleSupplierChange(e.target.value)} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
+              <select required value={formData.supplier_id || (formData.supplier_name === 'Walk-in Supplier' ? '__walkin__' : '')} onChange={(e) => handleSupplierChange(e.target.value)} className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500/50">
                 <option value="">Select Supplier</option>
+                <option value="__walkin__">Walk-in Supplier</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>

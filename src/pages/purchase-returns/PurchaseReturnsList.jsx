@@ -4,10 +4,12 @@ import { supabase } from '../../lib/supabase'
 import { Undo2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { SearchInput } from '../../components/SearchInput'
 import { useDebounce } from '../../hooks/useDebounce'
+import { useAuth } from '../../contexts/AuthContext'
 
 const PAGE_SIZE = 20
 
 export function PurchaseReturnsList() {
+  const { canView } = useAuth()
   const [returns, setReturns] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -121,9 +123,16 @@ export function PurchaseReturnsList() {
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <h1 className="text-xl lg:text-2xl font-bold text-white">Purchase Returns</h1>
-        <Link to="/purchase-returns/new" className="w-full sm:w-auto text-center bg-gradient-to-r from-teal-600 to-teal-500 text-white px-4 py-2 rounded-md hover:from-teal-500 hover:to-teal-400 transition-colors">
-          + New Return
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          {canView('cash-accounts') && (
+            <Link to="/cash-accounts" className="w-full sm:w-auto text-center border border-zinc-700 text-zinc-300 px-4 py-2 rounded-md hover:bg-zinc-800 transition-colors">
+              Cash Accounts
+            </Link>
+          )}
+          <Link to="/purchase-returns/new" className="w-full sm:w-auto text-center bg-gradient-to-r from-teal-600 to-teal-500 text-white px-4 py-2 rounded-md hover:from-teal-500 hover:to-teal-400 transition-colors">
+            + New Return
+          </Link>
+        </div>
       </div>
 
       <div className="mb-4">
