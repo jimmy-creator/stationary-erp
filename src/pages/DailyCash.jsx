@@ -314,6 +314,7 @@ export function DailyCash() {
                 {cashExpenses > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Expenses</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(cashExpenses)}</td></tr>}
                 {cashPOPayments > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Supplier Payments</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(cashPOPayments)}</td></tr>}
                 {cashRefunds > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Refunds</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(cashRefunds)}</td></tr>}
+                {cashPurchaseRefunds > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Purchase Return Refunds</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cashPurchaseRefunds)}</td></tr>}
                 <tr style={{ borderTop: '2px solid #d1d5db' }}><td style={{ padding: '6px', fontWeight: 700, color: '#111' }}>Net Cash</td><td style={{ padding: '6px', textAlign: 'right', fontWeight: 700, color: netCash >= 0 ? '#16a34a' : '#dc2626' }}>{formatCurrency(netCash)}</td></tr>
               </tbody>
             </table>
@@ -638,6 +639,7 @@ export function DailyCash() {
             {cashExpenses > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Expenses</span><span className="text-red-400">-{formatCurrency(cashExpenses)}</span></div>}
             {cashPOPayments > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Supplier Payments</span><span className="text-red-400">-{formatCurrency(cashPOPayments)}</span></div>}
             {cashRefunds > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Refunds</span><span className="text-red-400">-{formatCurrency(cashRefunds)}</span></div>}
+            {cashPurchaseRefunds > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Purchase Return Refunds</span><span className="text-green-400">+{formatCurrency(cashPurchaseRefunds)}</span></div>}
             <div className={`flex justify-between text-sm font-bold border-t border-zinc-800 pt-2 ${netCash >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               <span>Net Cash</span><span>{formatCurrency(netCash)}</span>
             </div>
