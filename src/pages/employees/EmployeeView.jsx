@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { Mail, Phone, Briefcase, CreditCard } from 'lucide-react'
+import { Mail, Phone, Briefcase, CreditCard, KeyRound } from 'lucide-react'
 
 export function EmployeeView() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { isEmployee } = useAuth()
   const [employee, setEmployee] = useState(null)
+  const [loginAccount, setLoginAccount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -20,6 +21,10 @@ export function EmployeeView() {
       const { data, error } = await supabase.from('employees').select('*').eq('id', id).single()
       if (error) throw error
       setEmployee(data)
+      if (data.auth_user_id) {
+        const { data: profile } = await supabase.from('profiles').select('email, role').eq('id', data.auth_user_id).single()
+        setLoginAccount(profile)
+      }
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -103,6 +108,16 @@ export function EmployeeView() {
           <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2"><CreditCard className="w-5 h-5 text-green-400" />Salary</h2>
           <div className="flex justify-between"><span className="text-zinc-500">Monthly</span><span className="text-xl font-bold text-white">{formatCurrency(employee.salary)}</span></div>
         </div>
+
+        {loginAccount && (
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5">
+            <h2 className="text-lg font-medium text-white mb-4 flex items-center gap-2"><KeyRound className="w-5 h-5 text-amber-400" />Login Account</h2>
+            <div className="space-y-3">
+              <div className="flex justify-between"><span className="text-zinc-500">Email</span><span className="text-zinc-300">{loginAccount.email}</span></div>
+              <div className="flex justify-between"><span className="text-zinc-500">Role</span><span className="text-zinc-300 capitalize">{loginAccount.role || '-'}</span></div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 text-xs text-zinc-600 flex gap-4">
