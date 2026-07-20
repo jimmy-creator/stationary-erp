@@ -210,7 +210,9 @@ export function DailyCash() {
   const totalPurchaseRefunds = refundedPurchaseReturns.reduce((sum, r) => sum + parseFloat(r.amount_refunded || 0), 0)
 
   // Totals
-  const totalCashIn = cashSales + cashCollections + cashOpeningCollections + cashPurchaseRefunds
+  // Credit sales carry no receipt method for the part paid up front, so their
+  // down-payment (amount_paid) is treated as cash in the register.
+  const totalCashIn = cashSales + creditSales + cashCollections + cashOpeningCollections + cashPurchaseRefunds
   const totalCashOut = cashExpenses + cashPOPayments + cashRefunds
   const netCash = totalCashIn - totalCashOut
 
@@ -309,6 +311,7 @@ export function DailyCash() {
               </thead>
               <tbody>
                 <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Sales</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cashSales)}</td></tr>
+                {creditSales > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Credit Sale Payments</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(creditSales)}</td></tr>}
                 {cashCollections > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Collections</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cashCollections)}</td></tr>}
                 {cashOpeningCollections > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Opening Balance Collections</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#16a34a' }}>+{formatCurrency(cashOpeningCollections)}</td></tr>}
                 {cashExpenses > 0 && <tr style={{ borderBottom: '1px solid #e5e7eb' }}><td style={{ padding: '5px 6px', color: '#374151' }}>Cash Expenses</td><td style={{ padding: '5px 6px', textAlign: 'right', color: '#dc2626' }}>-{formatCurrency(cashExpenses)}</td></tr>}
@@ -634,6 +637,7 @@ export function DailyCash() {
           </h2>
           <div className="space-y-3">
             <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Sales</span><span className="text-green-400">+{formatCurrency(cashSales)}</span></div>
+            {creditSales > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Credit Sale Payments</span><span className="text-green-400">+{formatCurrency(creditSales)}</span></div>}
             {cashCollections > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Collections</span><span className="text-green-400">+{formatCurrency(cashCollections)}</span></div>}
             {cashOpeningCollections > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Opening Balance Collections</span><span className="text-green-400">+{formatCurrency(cashOpeningCollections)}</span></div>}
             {cashExpenses > 0 && <div className="flex justify-between text-sm"><span className="text-zinc-400">Cash Expenses</span><span className="text-red-400">-{formatCurrency(cashExpenses)}</span></div>}
